@@ -1,0 +1,43 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Test output
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# Generated / cache
+_ReSharper*/
+*.cache
+*.log
+
+# Publish output
+app.publish/
+publish/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Excel / temporary
+~$*
+*.tmp
+
+# Rider / VS Code (harmless to ignore if present)
+.idea/
+.vscode/

@@ -1,0 +1,598 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        "SharpProj"
+    </assembly>
+    <members>
+        <member name="T:SharpProj.CoordinateTransformList">
+            <summary>
+Represents a <see cref="T:SharpProj.CoordinateTransform" /> which is implemented in a number of discrete steps
+</summary>
+        </member>
+        <member name="T:SharpProj.ChooseCoordinateTransform">
+            <summary>
+Represents a <see cref="T:SharpProj.CoordinateTransform" /> which is implemented in a number of ways. The best
+implementation is chosen at runtime, based on some predefined settings. (pyproj name: 'TransformerGroup')
+</summary>
+        </member>
+        <member name="T:SharpProj.CoordinateReferenceSystemList">
+            <summary>
+A compound CoordinateReference system, based on a combination of more (typically two) base CoordinateReferenceSystems
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.Ellipsoid.CelestialBodyName">
+            <summary>
+Body on which this applies. Usually 'Earth'
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.Datum.CelestialBodyName">
+            <summary>
+Body on which this applies. Usually 'Earth'
+</summary>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Factors(System.Double[])">
+            <summary>
+Calculate various cartographic properties, such as scale factors, angular distortion and meridian convergence. Depending on the underlying projection values will be calculated either numerically (default) or analytically.
+</summary>
+            <param name="ordinates" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Factors(SharpProj.PPoint)">
+            <summary>
+Calculate various cartographic properties, such as scale factors, angular distortion and meridian convergence. Depending on the underlying projection values will be calculated either numerically (default) or analytically.
+</summary>
+            <param name="coordinate" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.RoundTrip(System.Boolean,System.Int32,System.Double[])">
+            <summary>
+Measure internal consistency of a given transformation. The function performs n round trip transformations starting in either the forward or reverse direction. Returns the euclidean distance of the starting point coo and the resulting coordinate after n iterations back and forth.
+</summary>
+            <param name="forward" />
+            <param name="transforms" />
+            <param name="ordinates" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.RoundTrip(System.Boolean,System.Int32,SharpProj.PPoint)">
+            <summary>
+Measure internal consistency of a given transformation. The function performs n round trip transformations starting in either the forward or reverse direction. Returns the euclidean distance of the starting point coo and the resulting coordinate after n iterations back and forth.
+</summary>
+            <param name="forward" />
+            <param name="transforms" />
+            <param name="coordinate" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.GeoArea(System.Collections.Generic.IEnumerable`1{SharpProj.PPoint})">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the area of the polygon defined by points in square meters
+</summary>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.GeoDistanceZ(System.Double[],System.Double[])">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem.
+After applying the distance over the ellipsoid the Z coordinate is applied in meters, as if the route was a simple straight line (using Pythagoras).
+</summary>
+            <param name="ordinates1" />
+            <param name="ordinates2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.GeoDistanceZ(SharpProj.PPoint,SharpProj.PPoint)">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem.
+After applying the distance over the ellipsoid the Z coordinate is applied in meters, as if the route was a simple straight line (using Pythagoras).
+</summary>
+            <param name="p1" />
+            <param name="p2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.GeoDistance(System.Double[],System.Double[])">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem
+disregarding the height.
+</summary>
+            <param name="ordinates1" />
+            <param name="ordinates2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.GeoDistance(SharpProj.PPoint,SharpProj.PPoint)">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem
+disregarding the height.
+</summary>
+            <param name="p1" />
+            <param name="p2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.DoTransform(System.Boolean,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32)">
+            <summary>
+Implements range Apply and ApplyReversed.
+</summary>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.DoTransform(System.Boolean,SharpProj.PPoint@)">
+            <summary>
+Implements <see cref="M:SharpProj.CoordinateTransform.Apply(SharpProj.PPoint)" /> and <see cref="M:SharpProj.CoordinateTransform.ApplyReversed(SharpProj.PPoint)" /></summary>
+            <param name="forward" />
+            <param name="coordinate" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.ApplyReversed(System.Double[0:,0:])">
+            <summary>
+Transforms a series of coordinates specified as multiple lists of coordinates in-place
+</summary>
+            <param name="ordinateArray" />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.ApplyReversed(System.Double[][])">
+            <summary>
+Transforms a series of coordinates specified as multiple lists of coordinates in-place, first for x, second for y, etc.
+</summary>
+            <param name="ordinateArrays" />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Apply(System.Double[0:,0:])">
+            <summary>
+Transforms a series of coordinates specified as multiple lists of coordinates in-place
+</summary>
+            <param name="ordinateArray" />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Apply(System.Double[][])">
+            <summary>
+Transforms a series of coordinates specified as multiple lists of coordinates in-place, first for x, second for y, etc.
+</summary>
+            <param name="ordinateArrays" />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.ApplyReversed(System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32)">
+            <summary>
+Transform a series of coordinates, where the individual coordinate dimension may be represented by an array that
+is either fully populated a null pointer and /or a length of zero, which will be treated as a fully populated array
+of zeroes of length one, i.e.a constant, which will be treated as a fully populated array of that constant value
+</summary>
+            <remarks>Note that xStep, yStep, ... are in sizeof(double), not byte</remarks>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Apply(System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32,System.Double*,System.Int32,System.Int32)">
+            <summary>
+Transform a series of coordinates, where the individual coordinate dimension may be represented by an array that
+is either fully populated a null pointer and /or a length of zero, which will be treated as a fully populated array
+of zeroes of length one, i.e.a constant, which will be treated as a fully populated array of that constant value
+</summary>
+            <remarks>Note that xStep, yStep, ... are in sizeof(double), not byte</remarks>
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.ApplyReversed(System.Double[])">
+            <summary>
+Transform a single coordinate backwards
+</summary>
+            <param name="ordinates" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.ApplyReversed(SharpProj.PPoint)">
+            <summary>
+Transform a single coordinate backwards
+</summary>
+            <param name="coord" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Apply(System.Double[])">
+            <summary>
+Transform a single coordinate
+</summary>
+            <param name="ordinates" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateTransform.Apply(SharpProj.PPoint)">
+            <summary>
+Transform a single coordinate
+</summary>
+            <param name="coordinate" />
+            <returns />
+        </member>
+        <member name="T:SharpProj.CoordinateTransform">
+            <summary>
+The base of <see cref="T:SharpProj.ChooseCoordinateTransform" />, CoordinateOperation (private),
+<see cref="T:SharpProj.CoordinateTransformList" /> and <see cref="T:SharpProj.CoordinateTransformList" /></summary>
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.WithAxisNormalized(SharpProj.ProjContext)">
+            <summary>
+Gets this coordinate system, but now with axis normalized. If <paramref name="context" /> is not NULL, a new
+coordinate system within the specified context is returned. Otherwise the coordinate system itself or a coupled
+variant is returned. If a normalized variant is created disposing either the origin or the normalized version
+will also dispose the other.
+</summary>
+            <param name="context" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.WithNormalizedAxis(SharpProj.ProjContext)">
+            <summary>
+Gets this coordinate system, but now with axis normalized. If <paramref name="context" /> is not NULL, a new
+coordinate system within the specified context is returned. Otherwise the coordinate system itself or a coupled
+variant is returned. If a normalized variant is created disposing either the origin or the normalized version
+will also dispose the other.
+</summary>
+            <param name="context" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.GeoArea(System.Collections.Generic.IEnumerable`1{SharpProj.PPoint})">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the area of the polygon defined by points in square meters
+</summary>
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.GeoDistanceZ(System.Double[],System.Double[])">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem.
+After applying the distance over the ellipsoid the Z coordinate is applied in meters, as if the route was a simple straight line (using Pythagoras).
+</summary>
+            <param name="ordinates1" />
+            <param name="ordinates2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.GeoDistanceZ(SharpProj.PPoint,SharpProj.PPoint)">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem.
+After applying the distance over the ellipsoid the Z coordinate is applied in meters, as if the route was a simple straight line (using Pythagoras).
+</summary>
+            <param name="p1" />
+            <param name="p2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.GeoDistance(System.Double[],System.Double[])">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem
+disregarding the height.
+</summary>
+            <param name="ordinates1" />
+            <param name="ordinates2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="M:SharpProj.CoordinateReferenceSystem.GeoDistance(SharpProj.PPoint,SharpProj.PPoint)">
+            <summary>
+When called on an instance obtained from CoordinateRefenceSystem.DistanceTransform calculates the distance in meters
+Between p1 and p2 in meters calculating via the GeodeticCRS below the CoordinateReferenceSystem
+disregarding the height.
+</summary>
+            <param name="p1" />
+            <param name="p2" />
+            <returns>Distance in meters or Double.NaN if unable to calculate</returns>
+        </member>
+        <member name="P:SharpProj.CoordinateReferenceSystem.DistanceTransform">
+            <summary>Transform from CRS to backing geodetic CRS with normalized axis</summary>
+        </member>
+        <member name="P:SharpProj.CoordinateReferenceSystem.CelestialBodyName">
+            <summary>
+Body on which this applies. Usually 'Earth'
+</summary>
+        </member>
+        <member name="T:SharpProj.CoordinateReferenceSystem">
+            <summary>
+A coordinate reference system (CRS) refers to the way in which spatial data that represent the earth's surface (which is round / 3 dimensional) 
+is represented in a mathematical 2 or 3 dimensional way.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.CoordinateReferenceSystemFilter.CelestialBodyName">
+            <summary>
+Body on which this crs applies. Usually 'Earth'
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.CoordinateReferenceSystemFilter.CompletelyContainsArea">
+            <summary>
+Gets or sets a boolean indicating whether <see cref="P:SharpProj.Proj.CoordinateReferenceSystemFilter.CoordinateArea" /> must be completely inside the usage area of the <see cref="T:SharpProj.CoordinateReferenceSystem" />.
+False implies that the area must (just) intersect the area.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.CoordinateReferenceSystemInfo.CelestialBodyName">
+            <summary>
+Body on which this crs applies. Usually 'Earth'
+</summary>
+        </member>
+        <member name="T:SharpProj.Proj.CoordinateReferenceSystemInfo">
+            <summary>
+Container for CoordinateReference system information obtained from proj.db via <see cref="T:SharpProj.ProjContext" />.GetCoordinateReferenceSystems
+</summary>
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.CreateFromWellKnownText(System.String,SharpProj.Proj.CreateFromWKTOptions,System.String[]@,SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="T:SharpProj.ProjContext" />.CreateFromWellKnownText" /&gt;
+</summary>
+            <param name="from" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.CreateFromWellKnownText(System.String,System.String[]@,SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="T:SharpProj.ProjContext" />.CreateFromWellKnownText" /&gt;
+</summary>
+            <param name="from" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.CreateFromWellKnownText(System.String,SharpProj.Proj.CreateFromWKTOptions,SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="T:SharpProj.ProjContext" />.CreateFromWellKnownText" /&gt;
+</summary>
+            <param name="from" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.CreateFromWellKnownText(System.String,SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="T:SharpProj.ProjContext" />.CreateFromWellKnownText" /&gt;
+</summary>
+            <param name="from" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.Create(System.String[],SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="T:SharpProj.ProjContext" />.Create" /&gt;
+</summary>
+            <param name="from" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.Create(System.String,SharpProj.ProjContext)">
+            <summary>
+Creates a proj object from its definition. Shortcut for <see cref="M:SharpProj.ProjContext.Create(System.String)" /></summary>
+            <param name="definition" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.IsEquivalentToRelaxed(SharpProj.Proj.ProjObject,SharpProj.ProjContext)">
+            <summary>
+Checks if this Object is equivalent to the other proj object with the axis in any order.
+</summary>
+            <param name="other" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.Proj.ProjObject.IsEquivalentTo(SharpProj.Proj.ProjObject,SharpProj.ProjContext)">
+            <summary>
+Checks if this Object is equivalent to the other proj object.
+</summary>
+            <param name="other" />
+            <param name="ctx" />
+            <returns />
+        </member>
+        <member name="P:SharpProj.Proj.ProjObject.Identifier">
+            <summary>
+Gets the first (primary) <see cref="T:SharpProj.Proj.Identifier" /> from the <see cref="P:SharpProj.Proj.ProjObject.Identifiers" /> list.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.ProjObject.Identifiers">
+            <summary>
+Gets the list of declared identifiers of this proj object. (Most commonly filled from the database or WKT)
+</summary>
+        </member>
+        <member name="F:SharpProj.Proj.ProjType.GeographicCrs">
+            <summary>
+Abstract type, not returned by <see cref="T:SharpProj.Proj.ProjObject" />.Type. Will return Geographic2DCrs or Geographic3DCrs instead.
+</summary>
+        </member>
+        <member name="F:SharpProj.Proj.ProjType.CRS">
+            <summary>
+Abstract type, not returned by <see cref="T:SharpProj.Proj.ProjObject" />.Type.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.UsageArea.Center">
+            <summary>
+Gets the point located at the center of <see cref="P:SharpProj.Proj.UsageArea.NorthWestCorner" />, <see cref="P:SharpProj.Proj.UsageArea.SouthEastCorner" />, <see cref="P:SharpProj.Proj.UsageArea.SouthWestCorner" /> and <see cref="P:SharpProj.Proj.UsageArea.NorthEastCorner" /></summary>
+        </member>
+        <member name="P:SharpProj.Proj.UsageArea.NorthEastCorner">
+            <summary>
+The SouthEast corner as calculated by Converting NorthLat, EastLon from the Geospatial CRS to the CRS itself.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.UsageArea.SouthWestCorner">
+            <summary>
+The SouthEast corner as calculated by Converting SouthLat, WestLon from the Geospatial CRS to the CRS itself.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.UsageArea.SouthEastCorner">
+            <summary>
+The SouthEast corner as calculated by Converting SouthLat, EastLon from the Geospatial CRS to the CRS itself.
+</summary>
+        </member>
+        <member name="P:SharpProj.Proj.UsageArea.NorthWestCorner">
+            <summary>
+The North-West corner as calculated by Converting NorthLat, WestLon from the Geospatial CRS to the CRS itself.
+</summary>
+        </member>
+        <member name="M:SharpProj.PPoint.WithT(System.DateTime)">
+            <summary>
+Sets the T value to the decimalyear value of <paramref name="date" /></summary>
+            <param name="date" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.SwapXY">
+            <summary>
+Swaps the x and Y coordinate within the <see cref="T:SharpProj.PPoint" /></summary>
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.WithT(System.Double)">
+            <summary>
+Creates a new <see cref="T:SharpProj.PPoint" /> with all values copied and <see cref="P:SharpProj.PPoint.T" /> set to <paramref name="t" /></summary>
+            <param name="t" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.ToXYZ(System.Int32)">
+            <summary>
+Trims values in <see cref="T:SharpProj.PPoint" /> to just X, Y and Z. Also rounds these values to <paramref name="decimals" /> decimals.
+</summary>
+            <param name="decimals" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.ToXYZ">
+            <summary>
+Trims values in <see cref="T:SharpProj.PPoint" /> to just X, Y and Z.
+</summary>
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.ToXY(System.Int32)">
+            <summary>
+Trims values in <see cref="T:SharpProj.PPoint" /> to just X and Y. Also rounds these values to <paramref name="decimals" /> decimals.
+</summary>
+            <param name="decimals" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.PPoint.ToXY">
+            <summary>
+Trims values of <see cref="T:SharpProj.PPoint" /> to just X and Y
+</summary>
+            <returns />
+        </member>
+        <member name="P:SharpProj.PPoint.M">
+            <summary>Alias for Z</summary>
+        </member>
+        <member name="P:SharpProj.PPoint.T">
+            <summary>
+Time component of point
+</summary>
+        </member>
+        <member name="P:SharpProj.PPoint.Z">
+            <summary>
+Third ordinate of point
+</summary>
+        </member>
+        <member name="P:SharpProj.PPoint.Y">
+            <summary>
+Second ordinate of point
+</summary>
+        </member>
+        <member name="P:SharpProj.PPoint.X">
+            <summary>
+First ordinate of point
+</summary>
+        </member>
+        <member name="T:SharpProj.PPoint">
+            <summary>
+.Net wrapper for proj coordinate, containing at most 4 ordinates conveniently called: X, Y, Z, T. (or V[0] upto V[3]).
+What these coordinates mean (and if they are swapped, etc.) is all defined by their usage.
+</summary>
+        </member>
+        <member name="M:SharpProj.ProjContext.GetCoordinateReferenceSystems(SharpProj.Proj.CoordinateReferenceSystemFilter)">
+            <summary>
+Gets all <see cref="T:SharpProj.CoordinateReferenceSystem" />s matching the filter
+</summary>
+            <param name="filter" />
+            <returns />
+        </member>
+        <member name="P:SharpProj.ProjContext.Factory">
+            <summary>Gets the factory instance for this <see cref="T:SharpProj.ProjContext" /></summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.ProjDataVersion">
+            <summary>Version of the PROJ-data package with which this database is the most compatible.</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.IgnfVersion">
+            <summary>IGNF Version. As stored in Proj Database</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.EsriVersion">
+            <summary>ESRI Version. As stored in Proj Database</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.EpsgVersion">
+            <summary>EPSG Version. As stored in Proj Database</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.Version">
+            <summary>PROJ Version, wrapped by SharpProj</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.LogLevel">
+            <summary>
+Gets or sets the log level
+</summary>
+        </member>
+        <member name="M:SharpProj.ProjContext.CreateProj4Compatible(System.String)">
+            <summary>
+Similar to <see cref="M:SharpProj.ProjContext.Create(System.String)" /> but follows more strict Proj4 compatibility
+</summary>
+            <param name="definition" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.CreateFromWellKnownText(System.String,SharpProj.Proj.CreateFromWKTOptions,System.String[]@)">
+            <summary>
+Creates a new proj object from a Well known text definition.
+</summary>
+            <param name="from" />
+            <param name="warnings" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.CreateFromWellKnownText(System.String,System.String[]@)">
+            <summary>
+Creates a new proj object from a Well known text definition.
+</summary>
+            <param name="from" />
+            <param name="warnings" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.CreateFromWellKnownText(System.String,SharpProj.Proj.CreateFromWKTOptions)">
+            <summary>
+Creates a new proj object from a Well known text definition.
+</summary>
+            <param name="from" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.CreateFromWellKnownText(System.String)">
+            <summary>
+Creates a new proj object from a Well known text definition.
+</summary>
+            <param name="from" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.Create(System.String[])">
+            <summary>
+Creates a new proj object from its definition. Definiton could be an auth string, a projstring, wellknowntext or even projjson.
+</summary>
+            <param name="from" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.Create(System.String)">
+            <summary>
+Creates a new proj object from its definition. Definiton could be an auth string, a projstring, wellknowntext or even projjson.
+</summary>
+            <param name="definition" />
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.ClearGridCache">
+            <summary>
+Clears the current grid cache. Grid files will be reloaded when required
+</summary>
+        </member>
+        <member name="M:SharpProj.ProjContext.SetGridCache(System.Boolean,System.String,System.Int32,System.Int32)">
+            <summary>
+Sets up a specific caching location. By default a standard per user cache in local appdata is used.
+</summary>
+            <param name="enabled" />
+            <param name="path" />
+            <param name="max_mb" />
+            <param name="ttl_seconds" />
+        </member>
+        <member name="P:SharpProj.ProjContext.EndpointUrl">
+            <summary>
+Gets or sets the URL used to access the proj data
+</summary>
+        </member>
+        <member name="P:SharpProj.ProjContext.EnableNetworkConnections">
+            <summary>
+Enable or disable network access. This allows access to not locally available grid transforms, etc.
+</summary>
+        </member>
+        <member name="M:SharpProj.ProjContext.Clone">
+            <summary>
+Creates a disconnected copy of this context.
+</summary>
+            <returns />
+        </member>
+        <member name="M:SharpProj.ProjContext.#ctor">
+            <summary>
+Creates a new unrelated context
+</summary>
+        </member>
+        <member name="T:SharpProj.ProjContext">
+            <summary>
+Context objects enable safe multi-threaded usage of SharpProj. Each Proj object is connected to some context
+(if not specified, a default related or new context is used). All operations within a context should be
+performed in the same thread.
+</summary>
+        </member>
+    </members>
+</doc>
