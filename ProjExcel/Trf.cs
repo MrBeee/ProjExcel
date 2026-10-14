@@ -46,7 +46,8 @@ namespace ProjExcel
         //    Never
         //};
 
-
+        // AllowDeprecatedCrs is NOT PART OF THE ORIGINAL C++ Class; check validity of this property in the future.
+        // For now, I will include it in the output string.
         private sealed class CoordinateTransformOptionsInput
         {
             public CoordinateArea Area { get; set; }
@@ -523,23 +524,26 @@ namespace ProjExcel
             CoordinateReferenceSystem crsTarget,
             ProjContext pjContext)
         {
-            return CreateCoordinateTransform(crsSource, crsTarget, new CoordinateTransformOptions(), pjContext, true);
+            return CreateCoordinateTransform(crsSource, crsTarget, new CoordinateTransformOptions(), pjContext, true); // true stands for allowDeprecatedCrs input
         }
 
         private static CoordinateTransform CreateCoordinateTransform(
             CoordinateReferenceSystem crsSource,
             CoordinateReferenceSystem crsTarget,
             ProjContext pjContext,
-            bool allowDeprecatedCrs)
+            bool allowDeprecatedCrs)    // allowDeprecatedCrs is not part of CoordinateTransformOptions, so we need to pass it separately
         {
             return CreateCoordinateTransform(crsSource, crsTarget, new CoordinateTransformOptions(), pjContext, allowDeprecatedCrs);
         }
 
         private static CoordinateTransform CreateCoordinateTransform(object[,] oTransform, ProjContext pjContext)
         {
-            return CreateCoordinateTransform(oTransform, pjContext, true);
+            return CreateCoordinateTransform(oTransform, pjContext, true);  // true stands for allowDeprecatedCrs input
         }
 
+
+        // the next function contains bugs; allowDeprecatedCrs is passed to CreateCoordinateTransform(crsSource, crsTarget, options, pjContext, allowDeprecatedCrs)
+        // but not used in the function body
         private static CoordinateTransform CreateCoordinateTransform(object[,] oTransform, ProjContext pjContext, bool allowDeprecatedCrs)
         {
             if (oTransform == null)
@@ -687,6 +691,9 @@ namespace ProjExcel
             return string.Join(",", west.Value, south.Value, east.Value, north.Value);
         }
 
+        // Note: this function creates a textual representation in Excel of the C++ class CoordinateTransformOptions
+        // This class has been defined here: D:\GitHub\SharpProj\src\SharpProj\CoordinateArea.h
+        // CandidateIndex is not included in this class. So I need to check if it is needed in the future. For now, I will include it in the output string.
         [ExcelFunction(Name = "PE.trf.Options2", Description = "Creates an options token for CoordinateTransformOptionsInput settings")]
         public static string Options2(
             [ExcelArgument(Name = "Authority", Description = "Authority name (EPSG)")] object authority = null,
@@ -765,20 +772,6 @@ namespace ProjExcel
             return ApplyTransformEx(SourceCrs, TargetCrs, Coords, oOutputMode, oOptions, oAccuracy, oWestLongitude, oSouthLatitude, oEastLongitude, oNorthLatitude, true);
         }
 
-        private static void CopyCoordinates(double[,] source, int rowCount, int nCoordCols, double[] x, double[] y, double[] z, double[] t)
-        {
-            for (int i = 0; i < rowCount; i++)
-            {
-                x[i] = source[i, 0];
-                y[i] = source[i, 1];
-
-                if (nCoordCols > 2)
-                    z[i] = source[i, 2];
-
-                if (nCoordCols > 3)
-                    t[i] = source[i, 3];
-            }
-        }
 
         private static bool HasAnyFiniteValues(double[] values, int count)
         {
@@ -789,55 +782,6 @@ namespace ProjExcel
             }
 
             return false;
-        }
-
-        private static bool TryApplyTransform(
-            CoordinateTransform candidate,
-            bool inverse,
-            int nCoordCols,
-            double[] x,
-            double[] y,
-            double[] z,
-            double[] t)
-        {
-            switch (nCoordCols)
-            {
-                case 2:
-                    if (inverse)
-                        candidate.ApplyReversed(x, y);
-                    else
-                        candidate.Apply(x, y);
-
-                    return HasAnyFiniteValues(x, x.Length) || HasAnyFiniteValues(y, y.Length);
-
-                case 3:
-                    if (inverse)
-                        candidate.ApplyReversed(x, y, z);
-                    else
-                        candidate.Apply(x, y, z);
-
-                    return HasAnyFiniteValues(x, x.Length) || HasAnyFiniteValues(y, y.Length) || HasAnyFiniteValues(z, z.Length);
-
-                case 4:
-                    if (inverse)
-                        candidate.ApplyReversed(x, y, z, t);
-                    else
-                        candidate.Apply(x, y, z, t);
-
-                    return HasAnyFiniteValues(x, x.Length) || HasAnyFiniteValues(y, y.Length) ||
-                           HasAnyFiniteValues(z, z.Length) || HasAnyFiniteValues(t, t.Length);
-
-                default:
-                    return false;
-            }
-        }
-
-
-        private static bool IsAxisOrderChange(CoordinateTransform transform)
-        {
-            return transform != null &&
-                   !string.IsNullOrEmpty(transform.Name) &&
-                   transform.Name.IndexOf("axis order change", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static object ApplyTransformEx(object[,] SourceCrs, object[,] TargetCrs, double[,] Coords, object oOutputMode, object oAccuracy, object oOptions, object oWestLongitude, object oSouthLatitude, object oEastLongitude, object oNorthLatitude, bool inverse)
