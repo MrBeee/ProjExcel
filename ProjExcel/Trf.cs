@@ -22,6 +22,118 @@ namespace ProjExcel
         }
 
 
+        [ExcelFunction(Name = "PE.trf.Transform", Description = "Create a list of available transforms between source and target CRS")]
+        public static object Transform(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS")] object TargetCrs,
+            [ExcelArgument(Description = "X (longitude or easting).")] double x,
+            [ExcelArgument(Description = "Y (latitude or northing).")] double y,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            int actualSourceCrs = Optional.Check(SourceCrs, 4326);
+            int actualTargetCrs = Optional.Check(TargetCrs, 4326);
+
+            try
+            {
+                using (var pc = CreateContext())
+                {
+                    using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
+                    using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
+                    using (var trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
+                    {
+                        if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        if (optionValues.CandidateIndex > 0)
+                        {
+                            if (trf is CoordinateTransformList list)
+                            {
+                                if (optionValues.CandidateIndex >= list.Count)
+                                    return "#ERR: Candidate Index for transform out of range.";
+
+                                var trfFromList = list[optionValues.CandidateIndex];
+                                var pntFromList = trfFromList.Apply(new PPoint(x, y));
+                                return new object[,] { { pntFromList.X, pntFromList.Y } };
+                            }
+                            else
+                            {
+                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                            }
+                        }
+
+                        var pnt = trf.Apply(new PPoint(x, y));
+                        return new object[,] { { pnt.X, pnt.Y } };
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+
+
+        [ExcelFunction(Name = "PE.trf.TransformList", Description = "Create a list of available transforms between source and target CRS")]
+        public static object TransformList(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS")] object TargetCrs,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            int actualSourceCrs = Optional.Check(SourceCrs, 4326);
+            int actualTargetCrs = Optional.Check(TargetCrs, 4326);
+
+            try
+            {
+                using (var pc = CreateContext())
+                {
+                    using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
+                    using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
+                    using (var trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
+                    {
+                        if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        List<CoordinateTransform> candidates = new List<CoordinateTransform>();
+                        if (trf is CoordinateTransformList list)
+                        {
+                            for (int i = 0; i < list.Count; i++)
+                            {
+                                candidates.Add(list[i]);
+                            }
+                        }
+                        else
+                        {
+                            candidates.Add(trf);
+                        }
+
+                        return BuildTransformListResult(candidates);
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+
+
+
         [ExcelFunction(Name = "PE.trf.LatLongToWebMercator", Description = "Converts Lat/Lon degrees (EPSG:4326) to Web Mercator meters (EPSG:3857) using SharpProj")]
         public static object TransformLatLongToWebMercator(
             [ExcelArgument(Name = "latitude", Description = "Latitude in decimal degrees (e.g. 52.3676)")] double latitude,
@@ -52,7 +164,7 @@ namespace ProjExcel
         public static object TransformLatLongToWebMercatorEx(
             [ExcelArgument(Name = "latitude", Description = "Latitude in decimal degrees (e.g. 52.3676)")] double latitude,
             [ExcelArgument(Name = "longitude", Description = "Longitude in decimal degrees (e.g. 4.9041)")] double longitude, 
-            [ExcelArgument(Name = "Options", Description = "Transformation options read from a cell defined by =PE.trf.options()")] object options)
+            [ExcelArgument(Name = "Options", Description = "Transformation options read from a cell defined by =PE.trf.options()") ] object options)
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
             CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
@@ -66,14 +178,10 @@ namespace ProjExcel
                     using (var trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
                     {
                         if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
-                        {
                             return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
-                        }
 
                         if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
-                        {
                             return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
-                        }
 
                         if (optionValues.CandidateIndex > 0)
                         {
@@ -82,54 +190,13 @@ namespace ProjExcel
                                 if (optionValues.CandidateIndex >= list.Count)
                                     return "#ERR: Candidate Index for transform out of range.";
 
-                                foreach (var item in list)
-                                {
-                                    Debug.WriteLine("- - -");
-                                    Debug.WriteLine($"Name       : {item.Name}");
-                                    Debug.WriteLine($"Type       : {item.Type}");
-                                    Debug.WriteLine($"Identifier : {item.Identifier}");
-                                    Debug.WriteLine($"Identifiers: {item.Identifiers}");
-                                    Debug.WriteLine($"Accuracy   : {item.Accuracy}");
-                                    Debug.WriteLine($"IsAvailable: {item.IsAvailable}");
-                                    Debug.WriteLine($"HasBallParkTransformation: {item.HasBallParkTransformation}");
-                                    Debug.WriteLine($"HasInverse : {item.HasInverse}");
-                                    Debug.WriteLine($"MethodName : {item.MethodName}");
-                                    Debug.WriteLine($"Scope      : {item.Scope}");
-                                    Debug.WriteLine($"Remarks    : {item.Remarks}");
-                                    Debug.WriteLine($"GridUsages : {item.GridUsages}");
-                                    Debug.WriteLine($"Parameters : {item.Parameters}");
-                                    Debug.WriteLine($"SourceCRS  : {item.SourceCRS}");
-                                    Debug.WriteLine($"TargetCRS  : {item.TargetCRS}");
-                                    Debug.WriteLine($"Context    : {item.Context}");
-                                    Debug.WriteLine($"UsageArea  : {item.UsageArea}");
-                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
-                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
-                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
-                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
-                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
-                                    Debug.WriteLine($"Area.West  : {((ProjArea)item.UsageArea).WestLongitude);
-
-
-
-
-                                    Debug.WriteLine($"Identifier: {item.Identifier}");
-                                    Debug.WriteLine(" ");
-                                }
-
                                 var trfFromList = list[optionValues.CandidateIndex];
                                 var pntFromList = trfFromList.Apply(new PPoint(longitude, latitude));
                                 return new object[,] { { pntFromList.X, pntFromList.Y } };
-
                             }
                             else
                             {
-                                // Single transform
-                                Debug.WriteLine("- - -");
-                                Debug.WriteLine($"Single transform: {trf.Name}");
-                                Debug.WriteLine(" ");
-
                                 return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-
                             }
                         }
 
@@ -666,7 +733,7 @@ namespace ProjExcel
                                 }
                                 else
                                     return "#ERR: Invalid input.";
-                                break;
+                            break;
 
                             case 4:
                                 for (int i = 0; i < nCoordRows; i++)
@@ -729,7 +796,7 @@ namespace ProjExcel
                 {
                     using (var src = CoordinateReferenceSystem.CreateFromEpsg(3857, pc).WithNormalizedAxis(pc))
                     using (var dst = CoordinateReferenceSystem.CreateFromEpsg(4326, pc).WithNormalizedAxis(pc))
-                    using (var trf = CreateCoordinateTransform(src, dst, pc))
+                    using (var trf = CoordinateTransform.Create(src, dst, pc))
                     {
                         var r = trf.Apply(new PPoint(easting, northing));
                         return new object[,] { { r.X, r.Y } };
@@ -851,8 +918,8 @@ namespace ProjExcel
 
         private static void AddTransformInfo(List<KeyValuePair<string, string>> rows, string prefix, object target)
         {
-            rows.Add(new KeyValuePair<string, string>(prefix + ".RuntimeType", target.GetType().FullName));
-            rows.Add(new KeyValuePair<string, string>(prefix + ".PublicProperties", string.Join(", ", GetPublicPropertyNames(target))));
+            //rows.Add(new KeyValuePair<string, string>(prefix + ".RuntimeType", target.GetType().FullName));
+            //rows.Add(new KeyValuePair<string, string>(prefix + ".PublicProperties", string.Join(", ", GetPublicPropertyNames(target))));
 
             AddPropertyInfo(rows, target, prefix, "Name");
             AddPropertyInfo(rows, target, prefix, "Type");
@@ -1618,6 +1685,196 @@ namespace ProjExcel
             return false;
         }
 
+        private static readonly string[] CandidateAspectNames = new[]
+        {
+            "Name",
+            "Type",
+            "Identifier",
+            "Identifiers",
+            "Accuracy",
+            "IsAvailable",
+            "HasBallParkTransformation",
+            "HasInverse",
+            "MethodName",
+            "Scope",
+            "Remarks",
+            "GridUsages",
+            "Parameters",
+            "SourceCRS",
+            "TargetCRS",
+            "Context",
+            "UsageArea",
+            "UsageArea.Name",
+            "UsageArea.WestLongitude",
+            "UsageArea.SouthLatitude",
+            "UsageArea.EastLongitude",
+            "UsageArea.NorthLatitude",
+            "UsageArea.Center"
+        };
 
+        private static object[,] BuildTransformListResult(IList<CoordinateTransform> candidates)
+        {
+            int candidateCount = candidates == null ? 0 : candidates.Count;
+            object[,] result = new object[CandidateAspectNames.Length + 1, candidateCount + 1];
+
+            result[0, 0] = "TransformNo.";
+            for (int candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
+            {
+                result[0, candidateIndex + 1] = candidateIndex;
+            }
+
+            for (int row = 0; row < CandidateAspectNames.Length; row++)
+            {
+                result[row + 1, 0] = CandidateAspectNames[row];
+            }
+
+            for (int candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
+            {
+                string[] values = GetCandidateAspectValues(candidates[candidateIndex]);
+                for (int row = 0; row < CandidateAspectNames.Length; row++)
+                {
+                    result[row + 1, candidateIndex + 1] = values[row];
+                }
+            }
+
+            return result;
+        }
+
+        private static string[] GetCandidateAspectValues(CoordinateTransform candidate)
+        {
+            CoordinateArea areaBounds = candidate == null ? null : candidate.UsageArea;
+            object usageArea = GetCandidatePropertyValue(candidate, "UsageArea");
+
+            return new[]
+            {
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Name),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Type),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Identifier),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Identifiers),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Accuracy),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.IsAvailable),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.HasBallParkTransformation),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.HasInverse),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.MethodName),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Scope),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.Remarks),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.GridUsages),
+                SafeCandidateParameterValue(candidate == null ? null : (object)candidate.Parameters),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.SourceCRS),
+                SafeCandidateDebugValue(candidate == null ? null : (object)candidate.TargetCRS),
+                SafeCandidateContextValue(candidate),
+                usageArea == null ? "<null>" : "UsageArea",
+                SafeCandidateDebugValue(GetCandidatePropertyValue(usageArea, "Name")),
+                SafeCandidateDebugValue(areaBounds == null ? null : (object)areaBounds.WestLongitude),
+                SafeCandidateDebugValue(areaBounds == null ? null : (object)areaBounds.SouthLatitude),
+                SafeCandidateDebugValue(areaBounds == null ? null : (object)areaBounds.EastLongitude),
+                SafeCandidateDebugValue(areaBounds == null ? null : (object)areaBounds.NorthLatitude),
+                SafeCandidateDebugValue(GetCandidatePropertyValue(usageArea, "Center"))
+            };
+        }
+
+        private static string SafeCandidateParameterValue(object value)
+        {
+            if (value == null)
+                return "<null>";
+
+            if (value is string text)
+                return string.IsNullOrWhiteSpace(text) ? "<null>" : text;
+
+            IEnumerable enumerable = value as IEnumerable;
+            if (enumerable == null)
+                return SafeCandidateDebugValue(value);
+
+            try
+            {
+                List<string> items = new List<string>();
+
+                foreach (object item in enumerable)
+                {
+                    if (item == null)
+                        continue;
+
+                    string described = DescribeObject(item);
+                    if (!string.IsNullOrWhiteSpace(described))
+                        items.Add(described);
+                }
+
+                return items.Count == 0 ? "<null>" : string.Join("; ", items);
+            }
+            catch
+            {
+                return "<null>";
+            }
+        }
+
+        private static string SafeCandidateContextValue(CoordinateTransform candidate)
+        {
+            if (candidate == null)
+                return "<null>";
+
+            try
+            {
+                ProjContext context = candidate.Context;
+                if (context == null)
+                    return "<null>";
+
+                return string.Join("; ",
+                    "LogLevel=" + Convert.ToString(context.LogLevel),
+                    "EndpointUrl=" + Convert.ToString(context.EndpointUrl),
+                    "EnableNetworkConnections=" + Convert.ToString(context.EnableNetworkConnections));
+            }
+            catch
+            {
+                return "<null>";
+            }
+        }
+
+        private static object GetCandidatePropertyValue(object target, string propertyName)
+        {
+            if (target == null)
+                return null;
+
+            try
+            {
+                PropertyInfo property = target.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+                if (property == null || !property.CanRead || property.GetIndexParameters().Length != 0)
+                    return null;
+
+                return property.GetValue(target, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string SafeCandidateDebugValue(object value)
+        {
+            if (value == null)
+                return "<null>";
+
+            if (value is IEnumerable && !(value is string))
+                return "<null>";
+
+            try
+            {
+                string text = Convert.ToString(value);
+                if (string.IsNullOrWhiteSpace(text))
+                    return "<null>";
+
+                string fullName = value.GetType().FullName;
+                string name = value.GetType().Name;
+
+                if (string.Equals(text, fullName, StringComparison.Ordinal) ||
+                    string.Equals(text, name, StringComparison.Ordinal))
+                    return "<null>";
+
+                return text;
+            }
+            catch
+            {
+                return "<null>";
+            }
+        }
     }
 }
