@@ -2422,7 +2422,7 @@ namespace ProjExcel
 
         [ExcelFunction(
             Name = "PE.crs.IsDeprecated",
-            Description = "Confirms whether when size of semi-minor axis has been calculated"
+            Description = "Confirms whether a CRS has been deprecated"
             )]
         public static object IsDeprecated(
             [ExcelArgument("One [or two adjacent] cell[s] with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs")] object[,] oCrs,

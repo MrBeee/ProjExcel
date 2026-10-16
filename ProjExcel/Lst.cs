@@ -67,9 +67,9 @@ namespace ProjExcel
 
         private static string[] BuildAuthorityList()
         {
-            using (ProjContext pc = new ProjContext() { EnableNetworkConnections = false })
+            using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
             {
-                return pc.GetCoordinateReferenceSystems()
+                return pjContext.GetCoordinateReferenceSystems()
                     .Select(crsInfo => crsInfo.Authority)
                     .Where(authority => !String.IsNullOrWhiteSpace(authority))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -138,9 +138,9 @@ namespace ProjExcel
 
         private static object[,] BuildCoordinateReferenceSystemList()
         {
-            using (ProjContext pc = new ProjContext() { EnableNetworkConnections = false })
+            using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
             {
-                var crsItems = pc.GetCoordinateReferenceSystems().ToArray();
+                var crsItems = pjContext.GetCoordinateReferenceSystems().ToArray();
                 object[,] res = new object[crsItems.Length, 7];
 
                 for (int i = 0; i < crsItems.Length; i++)
@@ -222,9 +222,9 @@ namespace ProjExcel
 
             try
             {
-                using (ProjContext pc = new ProjContext() { EnableNetworkConnections = false })
+                using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
                 {
-                    var bodies = pc.GetCelestialBodies();
+                    var bodies = pjContext.GetCelestialBodies();
                     int nCount = bodies.Count;
 
                     object[,] res = new object[nCount + nOffset, 3];

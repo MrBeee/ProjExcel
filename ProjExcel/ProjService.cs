@@ -46,14 +46,14 @@ namespace ProjExcel
         {
             ThrowIfDisposed();
 
-            var context = new ProjContext
+            var pjContext = new ProjContext
             {
                 EnableNetworkConnections = EnableNetworkConnections,
                 LogLevel = LogLevel
             };
 
             if (!string.IsNullOrWhiteSpace(EndpointUrl))
-                context.EndpointUrl = EndpointUrl;
+                pjContext.EndpointUrl = EndpointUrl;
 
             if (!string.IsNullOrWhiteSpace(GridCachePath))
             {
@@ -61,13 +61,13 @@ namespace ProjExcel
                 if (!string.IsNullOrWhiteSpace(cacheDirectory))
                     Directory.CreateDirectory(cacheDirectory);
 
-                context.SetGridCache(EnableGridCache, GridCachePath, GridCacheSizeMb, GridCacheTtlSeconds);
+                pjContext.SetGridCache(EnableGridCache, GridCachePath, GridCacheSizeMb, GridCacheTtlSeconds);
             }
 
             if (LogLevel != ProjLogLevel.None)
-                context.Log += OnProjLog;
+                pjContext.Log += OnProjLog;
 
-            return context;
+            return pjContext;
         }
 
         public string GetProxyInfo()

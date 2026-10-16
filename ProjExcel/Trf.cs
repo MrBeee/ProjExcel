@@ -1,12 +1,15 @@
 using ExcelDna.Integration;
 using MathNet.Numerics.IntegralTransforms;
 using SharpProj;
+using SharpProj.Proj;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
+using System.Security.Cryptography;
 
 
 namespace ProjExcel
@@ -18,505 +21,166 @@ namespace ProjExcel
             return ProjService.Default.CreateContext();
         }
 
-        // Class CoordinateTransformOptions is defined here: D:\GitHub\SharpProj\src\SharpProj\CoordinateArea.h
-        // It contains the following class members:
 
-        //public ref class CoordinateTransformOptions
-        //{
-        //    public:
-        //    property CoordinateArea^ Area;
-        //    property String^ Authority;
-        //    property Nullable<double> Accuracy;
-        //    property bool NoBallparkConversions;
-        //    property bool NoDiscardIfMissing;
-        //    property bool UsePrimaryGridNames;
-        //    property bool UseSuperseded;
-        //    property bool StrictContains;
-        //    property IntermediateCrsUsage IntermediateCrsUsage;
-        //    property bool BestOnly;
-        //    property bool ForceOver;
-        //};
-
-        // Whereby IntermediateCrsUsage iis defined as
-
-        //public enum class IntermediateCrsUsage
-        //{
-        //    Auto,
-        //    Always,
-        //    Never
-        //};
-
-        // AllowDeprecatedCrs is NOT PART OF THE ORIGINAL C++ Class; check validity of this property in the future.
-        // For now, I will include it in the output string.
-        private sealed class CoordinateTransformOptionsInput
+        [ExcelFunction(Name = "PE.trf.LatLongToWebMercator", Description = "Converts Lat/Lon degrees (EPSG:4326) to Web Mercator meters (EPSG:3857) using SharpProj")]
+        public static object TransformLatLongToWebMercator(
+            [ExcelArgument(Name = "latitude", Description = "Latitude in decimal degrees (e.g. 52.3676)")] double latitude,
+            [ExcelArgument(Name = "longitude", Description = "Longitude in decimal degrees (e.g. 4.9041)")] double longitude)
         {
-            public CoordinateArea Area { get; set; }
-            public string Authority { get; set; }
-            public double? Accuracy { get; set; }
-            public bool NoBallparkConversions { get; set; }
-            public bool NoDiscardIfMissing { get; set; }
-            public bool UsePrimaryGridNames { get; set; }
-            public bool UseSuperseded { get; set; }
-            public bool AllowDeprecatedCrs { get; set; }
-            public bool StrictContains { get; set; }
-            public IntermediateCrsUsage IntermediateCrsUsage { get; set; }
-            public int CandidateIndex { get; set; }
-            public bool BestOnly { get; set; }
-            public bool ForceOver { get; set; }
-
-            public CoordinateTransformOptionsInput()
+            try
             {
-                Authority = "EPSG";
-                Accuracy = null;
-                IntermediateCrsUsage = IntermediateCrsUsage.Auto;
-            }
-
-            public static CoordinateTransformOptionsInput Parse(object oOptions)
-            {
-                var values = new CoordinateTransformOptionsInput
+                using (var pc = CreateContext())
                 {
-                    NoBallparkConversions = false,
-                    NoDiscardIfMissing = false,
-                    UsePrimaryGridNames = false,
-                    UseSuperseded = false,
-                    AllowDeprecatedCrs = false,
-                    StrictContains = false,
-                    BestOnly = false,
-                    ForceOver = false,
-                    CandidateIndex = 0
-                };
-
-                if (oOptions == null || oOptions == DBNull.Value || oOptions == Type.Missing)
-                    return values;
-
-                object raw = oOptions;
-                object[,] matrix = raw as object[,];
-                if (matrix != null && matrix.Length == 1)
-                    raw = matrix[0, 0];
-
-                string token = Convert.ToString(raw);
-                if (string.IsNullOrWhiteSpace(token))
-                    return values;
-
-                string[] parts = token.Split(new[] { ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (string part in parts)
-                {
-                    string[] keyValue = part.Split(new[] { '=' }, 2);
-                    if (keyValue.Length != 2)
-                        continue;
-
-                    string key = keyValue[0].Trim();
-                    string value = keyValue[1].Trim();
-
-                    if (string.Equals(key, "Authority", StringComparison.OrdinalIgnoreCase))
-                        values.Authority = string.IsNullOrWhiteSpace(value) ? "EPSG" : value;
-                    else if (string.Equals(key, "Accuracy", StringComparison.OrdinalIgnoreCase))
-                        values.Accuracy = ParseNullableDoubleOrDefault(value, null);
-                    else if (string.Equals(key, "NoBallparkConversions", StringComparison.OrdinalIgnoreCase))
-                        values.NoBallparkConversions = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "NoDiscardIfMissing", StringComparison.OrdinalIgnoreCase))
-                        values.NoDiscardIfMissing = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "UsePrimaryGridNames", StringComparison.OrdinalIgnoreCase))
-                        values.UsePrimaryGridNames = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "UseSuperseded", StringComparison.OrdinalIgnoreCase))
-                        values.UseSuperseded = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "AllowDeprecatedCrs", StringComparison.OrdinalIgnoreCase) || string.Equals(key, "AllowDeprecatedCRS", StringComparison.OrdinalIgnoreCase))
-                        values.AllowDeprecatedCrs = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "StrictContains", StringComparison.OrdinalIgnoreCase))
-                        values.StrictContains = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "BestOnly", StringComparison.OrdinalIgnoreCase))
-                        values.BestOnly = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "ForceOver", StringComparison.OrdinalIgnoreCase))
-                        values.ForceOver = ParseBooleanOrDefault(value, false);
-                    else if (string.Equals(key, "IntermediateCrsUsage", StringComparison.OrdinalIgnoreCase))
+                    using (var src = CoordinateReferenceSystem.CreateFromEpsg(4326, pc).WithNormalizedAxis(pc))
+                    using (var dst = CoordinateReferenceSystem.CreateFromEpsg(3857, pc).WithNormalizedAxis(pc))
+                    using (var trf = CoordinateTransform.Create(src, dst, pc))
                     {
-                        string usage = ParseIntermediateCrsUsageOrDefault(value);
-                        if (string.Equals(usage, "Always", StringComparison.OrdinalIgnoreCase))
-                            values.IntermediateCrsUsage = IntermediateCrsUsage.Always;
-                        else if (string.Equals(usage, "Never", StringComparison.OrdinalIgnoreCase))
-                            values.IntermediateCrsUsage = IntermediateCrsUsage.Never;
-                        else
-                            values.IntermediateCrsUsage = IntermediateCrsUsage.Auto;
+                        // note CoordinateTransform::Apply() is equal to CoordinateTransform::DoTransform(with bool forward = true)
+                        // void CoordinateTransform::ApplyReversed() is equal to CoordinateTransform::DoTransform(with bool forward = false)
+                        var r = trf.Apply(new PPoint(longitude, latitude));
+                        return new object[,] { { r.X, r.Y } };
                     }
-                    else if (string.Equals(key, "CandidateIndex", StringComparison.OrdinalIgnoreCase))
-                        values.CandidateIndex = ParseIntOrDefault(value, 0);
-                    else if (string.Equals(key, "Area", StringComparison.OrdinalIgnoreCase))
-                        values.Area = ParseAreaOrDefault(value, values.Area);
                 }
-
-                return values;
             }
-
-            //public CoordinateTransformOptions ToSharpProjOptions()
-            //{
-            //    var options = new CoordinateTransformOptions();
-            //    options.Authority = string.IsNullOrWhiteSpace(Authority) ? "EPSG" : Authority;
-            //    options.Accuracy = Accuracy;
-            //    options.Area = Area;
-            //    options.NoBallparkConversions = NoBallparkConversions;
-            //    options.NoDiscardIfMissing = NoDiscardIfMissing;
-            //    options.UsePrimaryGridNames = UsePrimaryGridNames;
-            //    options.UseSuperseded = UseSuperseded;
-            //    options.StrictContains = StrictContains;
-            //    options.IntermediateCrsUsage = IntermediateCrsUsage;
-            //    options.BestOnly = BestOnly;
-            //    options.ForceOver = ForceOver;
-            //    return options;
-            //}
-        }
-
-        private static int GetNrCoordinateColumns(int nMode, int nDefault)
-        {
-            int nOut;
-
-            switch (nMode & 7)
+            catch (System.Exception ex)
             {
-                default:
-                case 0:
-                    nOut = nDefault;
-                    break;
-                case 1:
-                    nOut = 4;
-                    break;
-                case 2:
-                    nOut = 3;
-                    break;
-                case 3:
-                    nOut = 2;
-                    break;
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                    nOut = 1;
-                    break;
+                return $"#ERR: {ex.Message}";
             }
-
-            return nOut;
         }
 
-        private static bool ParseBooleanOrDefault(object value, bool defaultValue)
+        [ExcelFunction(Name = "PE.trf.LatLongToWebMercatorEx", Description = "Converts Lon/Lat degrees (EPSG:4326) normalized input, to Web Mercator meters (EPSG:3857)")]
+        public static object TransformLatLongToWebMercatorEx(
+            [ExcelArgument(Name = "latitude", Description = "Latitude in decimal degrees (e.g. 52.3676)")] double latitude,
+            [ExcelArgument(Name = "longitude", Description = "Longitude in decimal degrees (e.g. 4.9041)")] double longitude, 
+            [ExcelArgument(Name = "Options", Description = "Transformation options read from a cell defined by =PE.trf.options()")] object options)
         {
-            if (value == null || value == DBNull.Value || value == Type.Missing)
-                return defaultValue;
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
 
-            if (value is bool)
-                return (bool)value;
-
-            if (value is byte)
-                return (byte)value != 0;
-
-            if (value is sbyte)
-                return (sbyte)value != 0;
-
-            if (value is short)
-                return (short)value != 0;
-
-            if (value is ushort)
-                return (ushort)value != 0;
-
-            if (value is int)
-                return (int)value != 0;
-
-            if (value is uint)
-                return (uint)value != 0;
-
-            if (value is long)
-                return (long)value != 0;
-
-            if (value is ulong)
-                return (ulong)value != 0;
-
-            if (value is float)
-                return Math.Abs((float)value) > 0f;
-
-            if (value is double)
-                return Math.Abs((double)value) > 0d;
-
-            if (value is decimal)
-                return ((decimal)value) != 0m;
-
-            string text = Convert.ToString(value);
-            if (string.IsNullOrWhiteSpace(text))
-                return defaultValue;
-
-            bool parsedBool;
-            if (bool.TryParse(text, out parsedBool))
-                return parsedBool;
-
-            text = text.Trim();
-            if (string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "y", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return true;
-            }
-
-            if (string.Equals(text, "no", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "n", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            double parsedNumber;
-            if (double.TryParse(text, out parsedNumber))
-                return parsedNumber != 0d;
-
-            return defaultValue;
-        }
-
-        private static int ParseIntOrDefault(object value, int defaultValue)
-        {
-            if (value == null || value == DBNull.Value || value == Type.Missing)
-                return defaultValue;
-
-            if (value is int)
-                return (int)value;
-
-            if (value is byte)
-                return (byte)value;
-
-            if (value is sbyte)
-                return (sbyte)value;
-
-            if (value is short)
-                return (short)value;
-
-            if (value is ushort)
-                return (ushort)value;
-
-            if (value is uint)
-                return (int)(uint)value;
-
-            if (value is long)
-                return (int)(long)value;
-
-            if (value is ulong)
-                return (int)(ulong)value;
-
-            if (value is float)
-                return (int)Math.Truncate((float)value);
-
-            if (value is double)
-                return (int)Math.Truncate((double)value);
-
-            if (value is decimal)
-                return (int)Math.Truncate((decimal)value);
-
-            string text = Convert.ToString(value);
-            if (string.IsNullOrWhiteSpace(text))
-                return defaultValue;
-
-            int parsedInt;
-            if (int.TryParse(text, out parsedInt))
-                return parsedInt;
-
-            double parsedNumber;
-            if (double.TryParse(text, out parsedNumber))
-                return (int)Math.Truncate(parsedNumber);
-
-            return defaultValue;
-        }
-
-        private static string ParseIntermediateCrsUsageOrDefault(object value)
-        {
-            string usage = Convert.ToString(value);
-
-            if (string.IsNullOrWhiteSpace(usage))
-                return "Auto";
-
-            if (string.Equals(usage, "Auto", StringComparison.OrdinalIgnoreCase))
-                return "Auto";
-
-            if (string.Equals(usage, "Always", StringComparison.OrdinalIgnoreCase))
-                return "Always";
-
-            if (string.Equals(usage, "Never", StringComparison.OrdinalIgnoreCase))
-                return "Never";
-
-            return "Auto";
-        }
-
-        private static double? ParseNullableDoubleOrDefault(object value, double? defaultValue)
-        {
-            if (value == null || value == DBNull.Value || value == Type.Missing)
-                return defaultValue;
-
-            if (value is double)
-                return (double)value;
-
-            if (value is float)
-                return Convert.ToDouble(value);
-
-            if (value is decimal)
-                return Convert.ToDouble(value);
-
-            if (value is int)
-                return (int)value;
-
-            if (value is long)
-                return (long)value;
-
-            string text = Convert.ToString(value);
-            if (string.IsNullOrWhiteSpace(text))
-                return defaultValue;
-
-            double parsed;
-            if (double.TryParse(text, out parsed))
-                return parsed;
-
-            return defaultValue;
-        }
-
-        private static CoordinateArea ParseAreaOrDefault(object value, CoordinateArea defaultValue)
-        {
-            if (value == null || value == DBNull.Value || value == Type.Missing)
-                return defaultValue;
-
-            if (value is CoordinateArea)
-                return (CoordinateArea)value;
-
-            object raw = value;
-            object[,] matrix = raw as object[,];
-            if (matrix != null && matrix.Length == 4)
-            {
-                double west = ParseNullableDoubleOrDefault(matrix[0, 0], double.NaN) ?? double.NaN;
-                double south = ParseNullableDoubleOrDefault(matrix[0, 1], double.NaN) ?? double.NaN;
-                double east = ParseNullableDoubleOrDefault(matrix[0, 2], double.NaN) ?? double.NaN;
-                double north = ParseNullableDoubleOrDefault(matrix[0, 3], double.NaN) ?? double.NaN;
-
-                if (!double.IsNaN(west) && !double.IsNaN(south) && !double.IsNaN(east) && !double.IsNaN(north))
-                    return new CoordinateArea(west, south, east, north);
-            }
-
-            string text = Convert.ToString(value);
-            if (string.IsNullOrWhiteSpace(text))
-                return defaultValue;
-
-            string[] parts = text.Split(new[] { ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 4)
-                return defaultValue;
-
-            double westValue;
-            double southValue;
-            double eastValue;
-            double northValue;
-
-            if (double.TryParse(parts[0].Trim(), out westValue) &&
-                double.TryParse(parts[1].Trim(), out southValue) &&
-                double.TryParse(parts[2].Trim(), out eastValue) &&
-                double.TryParse(parts[3].Trim(), out northValue))
-            {
-                return new CoordinateArea(westValue, southValue, eastValue, northValue);
-            }
-
-            return defaultValue;
-        }
-
-        private sealed class TransformOptionValues
-        {
-            public bool NoBallparkConversions { get; set; }
-            public bool NoDiscardIfMissing { get; set; }
-            public bool UsePrimaryGridNames { get; set; }
-            public bool UseSuperseded { get; set; }
-            public bool AllowDeprecatedCrs { get; set; }
-            public bool StrictContains { get; set; }
-            public IntermediateCrsUsage IntermediateCrsUsage { get; set; }
-            public int CandidateIndex { get; set; }
-        }
-
-        private static TransformOptionValues ParseTransformOptions(object oOptions)
-        {
-            var values = new TransformOptionValues
-            {
-                NoBallparkConversions = false,
-                NoDiscardIfMissing = false,
-                UsePrimaryGridNames = false,
-                UseSuperseded = false,
-                AllowDeprecatedCrs = false,
-                StrictContains = false,
-                IntermediateCrsUsage = IntermediateCrsUsage.Auto,
-                CandidateIndex = 0
-            };
-
-            if (oOptions == null || oOptions == DBNull.Value || oOptions == Type.Missing)
-                return values;
-
-            object raw = oOptions;
-            object[,] matrix = raw as object[,];
-            if (matrix != null && matrix.Length == 1)
-                raw = matrix[0, 0];
-
-            string token = Convert.ToString(raw);
-            if (string.IsNullOrWhiteSpace(token))
-                return values;
-
-            string[] parts = token.Split(new[] { ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (string part in parts)
-            {
-                string[] keyValue = part.Split(new[] { '=' }, 2);
-                if (keyValue.Length != 2)
-                    continue;
-
-                string key = keyValue[0].Trim();
-                string value = keyValue[1].Trim();
-
-                if (string.Equals(key, "NoBallparkConversions", StringComparison.OrdinalIgnoreCase))
-                    values.NoBallparkConversions = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "NoDiscardIfMissing", StringComparison.OrdinalIgnoreCase))
-                    values.NoDiscardIfMissing = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "UsePrimaryGridNames", StringComparison.OrdinalIgnoreCase))
-                    values.UsePrimaryGridNames = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "UseSuperseded", StringComparison.OrdinalIgnoreCase))
-                    values.UseSuperseded = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "AllowDeprecatedCrs", StringComparison.OrdinalIgnoreCase) || string.Equals(key, "AllowDeprecatedCRS", StringComparison.OrdinalIgnoreCase))
-                    values.AllowDeprecatedCrs = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "StrictContains", StringComparison.OrdinalIgnoreCase))
-                    values.StrictContains = ParseBooleanOrDefault(value, false);
-                else if (string.Equals(key, "IntermediateCrsUsage", StringComparison.OrdinalIgnoreCase))
+                using (var pc = CreateContext())
                 {
-                    string usage = ParseIntermediateCrsUsageOrDefault(value);
-                    if (string.Equals(usage, "Always", StringComparison.OrdinalIgnoreCase))
-                        values.IntermediateCrsUsage = IntermediateCrsUsage.Always;
-                    else if (string.Equals(usage, "Never", StringComparison.OrdinalIgnoreCase))
-                        values.IntermediateCrsUsage = IntermediateCrsUsage.Never;
-                    else
-                        values.IntermediateCrsUsage = IntermediateCrsUsage.Auto;
-                }
-                else if (string.Equals(key, "CandidateIndex", StringComparison.OrdinalIgnoreCase))
-                    values.CandidateIndex = ParseIntOrDefault(value, 0);
-            }
+                    using (var src = CoordinateReferenceSystem.CreateFromEpsg(4326, pc).WithNormalizedAxis(pc))
+                    using (var dst = CoordinateReferenceSystem.CreateFromEpsg(3857, pc).WithNormalizedAxis(pc))
+                    using (var trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
+                    {
+                        if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                        {
+                            return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
+                        }
 
-            return values;
+                        if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                        {
+                            return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
+                        }
+
+                        if (optionValues.CandidateIndex > 0)
+                        {
+                            if (trf is CoordinateTransformList list)
+                            {
+                                if (optionValues.CandidateIndex >= list.Count)
+                                    return "#ERR: Candidate Index for transform out of range.";
+
+                                foreach (var item in list)
+                                {
+                                    Debug.WriteLine("- - -");
+                                    Debug.WriteLine($"Name       : {item.Name}");
+                                    Debug.WriteLine($"Type       : {item.Type}");
+                                    Debug.WriteLine($"Identifier : {item.Identifier}");
+                                    Debug.WriteLine($"Identifiers: {item.Identifiers}");
+                                    Debug.WriteLine($"Accuracy   : {item.Accuracy}");
+                                    Debug.WriteLine($"IsAvailable: {item.IsAvailable}");
+                                    Debug.WriteLine($"HasBallParkTransformation: {item.HasBallParkTransformation}");
+                                    Debug.WriteLine($"HasInverse : {item.HasInverse}");
+                                    Debug.WriteLine($"MethodName : {item.MethodName}");
+                                    Debug.WriteLine($"Scope      : {item.Scope}");
+                                    Debug.WriteLine($"Remarks    : {item.Remarks}");
+                                    Debug.WriteLine($"GridUsages : {item.GridUsages}");
+                                    Debug.WriteLine($"Parameters : {item.Parameters}");
+                                    Debug.WriteLine($"SourceCRS  : {item.SourceCRS}");
+                                    Debug.WriteLine($"TargetCRS  : {item.TargetCRS}");
+                                    Debug.WriteLine($"Context    : {item.Context}");
+                                    Debug.WriteLine($"UsageArea  : {item.UsageArea}");
+                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
+                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
+                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
+                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
+                                    Debug.WriteLine($"Area.Name  : {item.UsageArea.Name}");
+                                    Debug.WriteLine($"Area.West  : {((ProjArea)item.UsageArea).WestLongitude);
+
+
+
+
+                                    Debug.WriteLine($"Identifier: {item.Identifier}");
+                                    Debug.WriteLine(" ");
+                                }
+
+                                var trfFromList = list[optionValues.CandidateIndex];
+                                var pntFromList = trfFromList.Apply(new PPoint(longitude, latitude));
+                                return new object[,] { { pntFromList.X, pntFromList.Y } };
+
+                            }
+                            else
+                            {
+                                // Single transform
+                                Debug.WriteLine("- - -");
+                                Debug.WriteLine($"Single transform: {trf.Name}");
+                                Debug.WriteLine(" ");
+
+                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+
+                            }
+                        }
+
+                        var pnt = trf.Apply(new PPoint(longitude, latitude));
+                        return new object[,] { { pnt.X, pnt.Y } };
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
         }
 
-        private static CoordinateTransformOptions CreateCoordinateTransformOptions(TransformOptionValues values, double accuracyArg, double westLongitude, double southLatitude, double eastLongitude, double northLatitude)
+        // From : D:\GitHub\SharpProj\src\SharpProj\CoordinateTransform.cpp line 49.
+        // CoordinateTransform^ CoordinateTransform::Create(CoordinateReferenceSystem^ sourceCrs, CoordinateReferenceSystem^ targetCrs, CoordinateTransformOptions^ options, ProjContext^ ctx)
+        // Note that ic ctx = NULL, the context is copied from the source CRS: 
+        // if (!ctx) // After fromCrs
+        //     ctx = sourceCrs->Context;
+
+        // public class CoordinateReferenceSystemFilter can be used to filter a list of CRS entries using a AllowDeprecated flag
+
+        // Instantiate a default set of parameters to be used by proj_get_crs_list():
+        // auto ret = new(std::nothrow) PROJ_CRS_LIST_PARAMETERS();
+        //if (ret) {
+        //    ret->types = nullptr;
+        //    ret->typesCount = 0;
+        //    ret->crs_area_of_use_contains_bbox = TRUE;
+        //    ret->bbox_valid = FALSE;
+        //    ret->west_lon_degree = 0.0;
+        //    ret->south_lat_degree = 0.0;
+        //    ret->east_lon_degree = 0.0;
+        //    ret->north_lat_degree = 0.0;
+        //    ret->allow_deprecated = FALSE;
+        //    ret->celestial_body_name = nullptr;
+        //}
+        //return ret;
+
+
+
+
+
+
+
+        private static CoordinateTransform CreateCoordinateTransform(
+            CoordinateReferenceSystem crsSource,
+            CoordinateReferenceSystem crsTarget,
+            CoordinateTransformOptions coordinateTransformOptions,
+            ProjContext pjContext)
         {
-            var options = new CoordinateTransformOptions();
-            options.Authority = "EPSG";
-
-            if (accuracyArg >= 0)
-                options.Accuracy = accuracyArg;
-
-            if (westLongitude >= -180 && westLongitude <= 180 &&
-                eastLongitude >= -180 && eastLongitude <= 180 &&
-                southLatitude >= -90 && southLatitude <= 90 &&
-                northLatitude >= -90 && northLatitude <= 90 &&
-                southLatitude <= northLatitude)
-            {
-                if (westLongitude != -1000 || southLatitude != -1000 || eastLongitude != -1000 || northLatitude != -1000)
-                    options.Area = new CoordinateArea(westLongitude, southLatitude, eastLongitude, northLatitude);
-            }
-
-            options.NoBallparkConversions = values.NoBallparkConversions;
-            options.NoDiscardIfMissing = values.NoDiscardIfMissing;
-            options.UsePrimaryGridNames = values.UsePrimaryGridNames;
-            options.UseSuperseded = values.UseSuperseded;
-            options.StrictContains = values.StrictContains;
-            options.IntermediateCrsUsage = values.IntermediateCrsUsage;
-
-            return options;
+            return CreateCoordinateTransform(crsSource, crsTarget, coordinateTransformOptions, pjContext, true); // true stands for allowDeprecatedCrs input
         }
 
         private static CoordinateTransform CreateCoordinateTransform(
@@ -608,135 +272,6 @@ namespace ProjExcel
             return CoordinateTransform.CreateFromDatabase(sTransform, nTransform, pjContext);
         }
 
-        /// <summary>
-        /// Converts WGS84 Lat/Lon (EPSG:4326) into Web Mercator X/Y meters (EPSG:3857).
-        /// </summary>
-        /// <param name="latitude">Latitude in decimal degrees</param>
-        /// <param name="longitude">Longitude in decimal degrees</param>
-        /// <returns>A 1x2 row array containing { X_Meters, Y_Meters }</returns>
-        /// <example>
-        /// In cell A1, enter a Latitude: 52.3676
-        /// In cell B1, enter a Longitude: 4.9041
-        /// In cell C1, type the formula: =PE.tst.TransformToWebMercator(A1, B1)
-        /// Press Enter. Excel will automatically spill two values across cells C1 and D1:
-        /// C1 (X in Meters):  ~545921.915
-        /// D1 (Y in Meters): ~6866867.122
-        /// </example>
-        [ExcelFunction( Name = "PE.trf.LatLongToWebMercator", 
-                        Description = "Converts Lat/Lon degrees (EPSG:4326) to Web Mercator meters (EPSG:3857) using SharpProj")]
-        public static object TransformLatLongToWebMercator(
-            [ExcelArgument(Name = "latitude", Description = "Latitude in decimal degrees (e.g. 52.3676)")] double latitude,
-            [ExcelArgument(Name = "longitude", Description = "Longitude in decimal degrees (e.g. 4.9041)")] double longitude)
-        {
-            try
-            {
-                using (var pc = CreateContext())
-                {
-                    using (var src = CoordinateReferenceSystem.CreateFromEpsg(4326, pc).WithNormalizedAxis(pc))
-                    using (var dst = CoordinateReferenceSystem.CreateFromEpsg(3857, pc).WithNormalizedAxis(pc))
-                    using (var trf = CreateCoordinateTransform(src, dst, pc))
-                    {
-                        var r = trf.Apply(new PPoint(longitude, latitude));
-                        return new object[,] { { r.X, r.Y } };
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                return $"#ERR: {ex.Message}";
-            }
-        }
-
-        [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for advanced transform settings")]
-        public static string Options(
-            [ExcelArgument(Name = "NoBallparkConversions", Description = "Disallow ballpark conversions (FALSE)")] object noBallparkConversions = null,
-            [ExcelArgument(Name = "NoDiscardIfMissing", Description = "Allow transforms even when a grid is missing (FALSE)")] object noDiscardIfMissing = null,
-            [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
-            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
-            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null,
-            [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
-            [ExcelArgument(Name = "IntermediateCrsUsage", Description = "Auto, Always or Never (Auto)")] object intermediateCrsUsage = null,
-            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null)
-        {
-            return string.Join("; ",
-                "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
-                "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
-                "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
-                "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
-                "AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false),
-                "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
-                "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
-                "CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0));
-        }
-
-        private static string BuildAreaToken(object westLongitude, object southLatitude, object eastLongitude, object northLatitude)
-        {
-            double? west = ParseNullableDoubleOrDefault(westLongitude, null);
-            double? south = ParseNullableDoubleOrDefault(southLatitude, null);
-            double? east = ParseNullableDoubleOrDefault(eastLongitude, null);
-            double? north = ParseNullableDoubleOrDefault(northLatitude, null);
-
-            if (!west.HasValue || !south.HasValue || !east.HasValue || !north.HasValue)
-                return string.Empty;
-
-            if (west.Value < -180 || west.Value > 180 ||
-                east.Value < -180 || east.Value > 180 ||
-                south.Value < -90 || south.Value > 90 ||
-                north.Value < -90 || north.Value > 90 ||
-                south.Value > north.Value)
-            {
-                return string.Empty;
-            }
-
-            return string.Join(",", west.Value, south.Value, east.Value, north.Value);
-        }
-
-        // Note: this function creates a textual representation in Excel of the C++ class CoordinateTransformOptions
-        // This class has been defined here: D:\GitHub\SharpProj\src\SharpProj\CoordinateArea.h
-        // CandidateIndex is not included in this class. So I need to check if it is needed in the future. For now, I will include it in the output string.
-        [ExcelFunction(Name = "PE.trf.Options2", Description = "Creates an options token for CoordinateTransformOptionsInput settings")]
-        public static string Options2(
-            [ExcelArgument(Name = "Authority", Description = "Authority name (EPSG)")] object authority = null,
-            [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
-            [ExcelArgument(Name = "WestLongitude", Description = "West longitude of area of interest (blank = none)")] object westLongitude = null,
-            [ExcelArgument(Name = "SouthLatitude", Description = "South latitude of area of interest (blank = none)")] object southLatitude = null,
-            [ExcelArgument(Name = "EastLongitude", Description = "East longitude of area of interest (blank = none)")] object eastLongitude = null,
-            [ExcelArgument(Name = "NorthLatitude", Description = "North latitude of area of interest (blank = none)")] object northLatitude = null,
-            [ExcelArgument(Name = "NoBallparkConversions", Description = "Disallow ballpark conversions (FALSE)")] object noBallparkConversions = null,
-            [ExcelArgument(Name = "NoDiscardIfMissing", Description = "Allow transforms even when a grid is missing (FALSE)")] object noDiscardIfMissing = null,
-            [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
-            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
-            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null,
-            [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
-            [ExcelArgument(Name = "IntermediateCrsUsage", Description = "Auto, Always or Never (Auto)")] object intermediateCrsUsage = null,
-            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null,
-            [ExcelArgument(Name = "BestOnly", Description = "Use best transform only (FALSE)")] object bestOnly = null,
-            [ExcelArgument(Name = "ForceOver", Description = "Force over-range longitude handling (FALSE)")] object forceOver = null)
-        {
-            string authorityValue = Convert.ToString(authority);
-            if (string.IsNullOrWhiteSpace(authorityValue))
-                authorityValue = "EPSG";
-
-            double? accuracyValue = ParseNullableDoubleOrDefault(accuracy, null);
-            string areaValue = BuildAreaToken(westLongitude, southLatitude, eastLongitude, northLatitude);
-
-            return string.Join("; ",
-                "Authority=" + authorityValue,
-                "Accuracy=" + (accuracyValue.HasValue ? Convert.ToString(accuracyValue.Value) : string.Empty),
-                "Area=" + areaValue,
-                "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
-                "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
-                "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
-                "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
-                "AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false),
-                "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
-                "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
-                "CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0),
-                "BestOnly=" + ParseBooleanOrDefault(bestOnly, false),
-                "ForceOver=" + ParseBooleanOrDefault(forceOver, false));
-        }
-
-
 
         [ExcelFunction(Name = "PE.trf.ApplyForwardEx", Description = "Coordinate conversion with explicit advanced options")]
         public static object ApplyForwardEx(
@@ -744,15 +279,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrsOrNul", Description = "Target CRS or blank when source is a transform")] object[,] TargetCrs,
             [ExcelArgument(Name = "Coordinate(s)", Description = "Input coordinate array")] double[,] Coords,
             [ExcelArgument(Name = "outputMode", Description = "(0) 0 = input width, 1 = xyzt, 2 = xyz, 3 = xy, 4 = x, 5 = y, 6 = z, 7 = t")] object oOutputMode,
-            [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (-1)")] object oAccuracy,
-            [ExcelArgument(Name = "options", Description = "Options token created by PE.trf.Options")] object oOptions,
-            [ExcelArgument(Name = "WestLongitude", Description = "West longitude of area of interest (-1000)")] object oWestLongitude,
-            [ExcelArgument(Name = "SouthLatitude", Description = "South latitude of area of interest (-1000)")] object oSouthLatitude,
-            [ExcelArgument(Name = "EastLongitude", Description = "East longitude of area of interest (-1000)")] object oEastLongitude,
-            [ExcelArgument(Name = "NorthLatitude", Description = "North latitude of area of interest (-1000)")] object oNorthLatitude
+            [ExcelArgument(Name = "options", Description = "Options token created by PE.trf.Options2")] object oOptions
             )
         {
-            return ApplyTransformEx(SourceCrs, TargetCrs, Coords, oOutputMode, oAccuracy, oOptions, oWestLongitude, oSouthLatitude, oEastLongitude, oNorthLatitude, false);
+            return ApplyTransformEx(SourceCrs, TargetCrs, Coords, oOutputMode, oOptions, false);
         }
 
         [ExcelFunction(Name = "PE.trf.ApplyInverseEx", Description = "Inverse coordinate conversion with explicit advanced options")]
@@ -761,41 +291,49 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrsOrNul", Description = "Target CRS or blank when source is a transform")] object[,] TargetCrs,
             [ExcelArgument(Name = "Coordinate(s)", Description = "Input coordinate array")] double[,] Coords,
             [ExcelArgument(Name = "outputMode", Description = "0 = input width, 1 = xyzt, 2 = xyz, 3 = xy, 4 = x, 5 = y, 6 = z, 7 = t")] object oOutputMode,
-            [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (-1)")] object oAccuracy,
-            [ExcelArgument(Name = "options", Description = "Options token created by PE.trf.Options")] object oOptions,
-            [ExcelArgument(Name = "WestLongitude", Description = "West longitude of area of interest (-1000)")] object oWestLongitude,
-            [ExcelArgument(Name = "SouthLatitude", Description = "South latitude of area of interest (-1000)")] object oSouthLatitude,
-            [ExcelArgument(Name = "EastLongitude", Description = "East longitude of area of interest (-1000)")] object oEastLongitude,
-            [ExcelArgument(Name = "NorthLatitude", Description = "North latitude of area of interest (-1000)")] object oNorthLatitude
+            [ExcelArgument(Name = "options", Description = "Options token created by PE.trf.Options2")] object oOptions
             )
         {
-            return ApplyTransformEx(SourceCrs, TargetCrs, Coords, oOutputMode, oOptions, oAccuracy, oWestLongitude, oSouthLatitude, oEastLongitude, oNorthLatitude, true);
+            return ApplyTransformEx(SourceCrs, TargetCrs, Coords, oOutputMode, oOptions, true);
         }
 
-
-        private static bool HasAnyFiniteValues(double[] values, int count)
+        private static int GetNrCoordinateColumns(int nMode, int nDefault)
         {
-            for (int i = 0; i < count; i++)
+            int nOut;
+
+            switch (nMode & 7)
             {
-                if (!double.IsNaN(values[i]) && !double.IsInfinity(values[i]))
-                    return true;
+                default:
+                case 0:
+                    nOut = nDefault;
+                    break;
+                case 1:
+                    nOut = 4;
+                    break;
+                case 2:
+                    nOut = 3;
+                    break;
+                case 3:
+                    nOut = 2;
+                    break;
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                    nOut = 1;
+                    break;
             }
 
-            return false;
+            return nOut;
         }
 
-        private static object ApplyTransformEx(object[,] SourceCrs, object[,] TargetCrs, double[,] Coords, object oOutputMode, object oAccuracy, object oOptions, object oWestLongitude, object oSouthLatitude, object oEastLongitude, object oNorthLatitude, bool inverse)
+        private static object ApplyTransformEx(object[,] SourceCrs, object[,] TargetCrs, double[,] Coords, object oOutputMode, object oOptions, bool inverse)
         {
             if (ExcelDnaUtil.IsInFunctionWizard())
                 return ExcelError.ExcelErrorRef;
 
             int outputMode = Optional.Check(oOutputMode, 0);
             bool usingTransform = Optional.IsNul(TargetCrs);
-            double accuracyArg = Optional.Check(oAccuracy, -1.0);
-            double westLongitude = Optional.Check(oWestLongitude, -1000.0);
-            double southLatitude = Optional.Check(oSouthLatitude, -1000.0);
-            double eastLongitude = Optional.Check(oEastLongitude, -1000.0);
-            double northLatitude = Optional.Check(oNorthLatitude, -1000.0);
 
             if (outputMode < 0 || outputMode > 7)
                 return "#ERR: Invalid input.";
@@ -807,8 +345,181 @@ namespace ProjExcel
                 return "#ERR: Invalid input.";
 
             int nOut = GetNrCoordinateColumns(outputMode, nCoordCols);
-            TransformOptionValues values = ParseTransformOptions(oOptions);
-            CoordinateTransformOptions options = CreateCoordinateTransformOptions(values, accuracyArg, westLongitude, southLatitude, eastLongitude, northLatitude);
+            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(oOptions);
+            if (!string.IsNullOrWhiteSpace(values.ErrorMessage))
+                return "#ERR: " + values.ErrorMessage;
+
+            CoordinateTransformOptions options = TransformOptions.CreateCoordinateTransformOptions(values);
+
+            ProjContext pjContext = null;
+            CoordinateReferenceSystem crsSource = null;
+            CoordinateReferenceSystem crsTarget = null;
+            CoordinateTransform transform = null;
+
+            try
+            {
+                pjContext = CreateContext();
+
+                if (usingTransform)
+                    transform = CreateCoordinateTransform(SourceCrs, pjContext);
+                else
+                {
+                    crsSource = Crs.CreateCrs(SourceCrs, pjContext).WithNormalizedAxis(pjContext);
+                    crsTarget = Crs.CreateCrs(TargetCrs, pjContext).WithNormalizedAxis(pjContext);
+                    transform = CreateCoordinateTransform(crsSource, crsTarget, options, pjContext, values.AllowDeprecatedCrs);
+                }
+
+                double[] x = new double[nCoordRows];
+                double[] y = new double[nCoordRows];
+                double[] z = new double[nCoordRows];
+                double[] t = new double[nCoordRows];
+                object[,] res = new object[nCoordRows, nOut];
+                Exception lastException = null;
+
+                for (int i = 0; i < nCoordRows; i++)
+                {
+                    x[i] = Coords[i, 0];
+                    y[i] = Coords[i, 1];
+
+                    if (nCoordCols > 2)
+                        z[i] = Coords[i, 2];
+
+                    if (nCoordCols > 3)
+                        t[i] = Coords[i, 3];
+                }
+
+                try
+                {
+                    switch (nCoordCols)
+                    {
+                        default:
+                        case 2:
+                            if (inverse)
+                                transform.ApplyReversed(x, y);
+                            else
+                                transform.Apply(x, y);
+                            break;
+
+                        case 3:
+                            if (inverse)
+                                transform.ApplyReversed(x, y, z);
+                            else
+                                transform.Apply(x, y, z);
+                            break;
+
+                        case 4:
+                            if (inverse)
+                                transform.ApplyReversed(x, y, z, t);
+                            else
+                                transform.Apply(x, y, z, t);
+                            break;
+                    }
+
+
+                    switch (outputMode & 7)
+                    {
+                        case 0:
+                        case 1:
+                        case 2:
+                        case 3:
+                            if (nOut == 2)
+                            {
+                                for (int i = 0; i < nCoordRows; i++)
+                                {
+                                    res[i, 0] = Optional.CheckNan(x[i]);
+                                    res[i, 1] = Optional.CheckNan(y[i]);
+                                }
+                            }
+                            else if (nOut == 3)
+                            {
+                                for (int i = 0; i < nCoordRows; i++)
+                                {
+                                    res[i, 0] = Optional.CheckNan(x[i]);
+                                    res[i, 1] = Optional.CheckNan(y[i]);
+                                    res[i, 2] = Optional.CheckNan(z[i]);
+                                }
+                            }
+                            else if (nOut == 4)
+                            {
+                                for (int i = 0; i < nCoordRows; i++)
+                                {
+                                    res[i, 0] = Optional.CheckNan(x[i]);
+                                    res[i, 1] = Optional.CheckNan(y[i]);
+                                    res[i, 2] = Optional.CheckNan(z[i]);
+                                    res[i, 3] = Optional.CheckNan(t[i]);
+                                }
+                            }
+                            else
+                                return "#ERR: Invalid input.";
+                            break;
+
+                        case 4:
+                            for (int i = 0; i < nCoordRows; i++)
+                                res[i, 0] = Optional.CheckNan(x[i]);
+                            break;
+
+                        case 5:
+                            for (int i = 0; i < nCoordRows; i++)
+                                res[i, 0] = Optional.CheckNan(y[i]);
+                            break;
+
+                        case 6:
+                            for (int i = 0; i < nCoordRows; i++)
+                                res[i, 0] = Optional.CheckNan(z[i]);
+                            break;
+
+                        case 7:
+                            for (int i = 0; i < nCoordRows; i++)
+                                res[i, 0] = Optional.CheckNan(t[i]);
+                            break;
+                    }
+
+                        return res;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        return lastException != null
+                                ? AddIn.ProcessException(lastException)
+                                : "#ERR: No valid coordinate transform.";
+                }
+            }
+            catch (Exception ex)
+            {
+                return AddIn.ProcessException(ex);
+            }
+            finally
+            {
+                transform?.Dispose();
+                crsSource?.Dispose();
+                crsTarget?.Dispose();
+                pjContext?.Dispose();
+            }
+        }
+
+        private static object ApplyTransformExOld(object[,] SourceCrs, object[,] TargetCrs, double[,] Coords, object oOutputMode, object oOptions, bool inverse)
+        {
+            if (ExcelDnaUtil.IsInFunctionWizard())
+                return ExcelError.ExcelErrorRef;
+
+            int outputMode = Optional.Check(oOutputMode, 0);
+            bool usingTransform = Optional.IsNul(TargetCrs);
+
+            if (outputMode < 0 || outputMode > 7)
+                return "#ERR: Invalid input.";
+
+            int nCoordRows = Coords.GetLength(0);
+            int nCoordCols = Coords.GetLength(1);
+
+            if (nCoordRows < 1 || nCoordCols < 2 || nCoordCols > 4)
+                return "#ERR: Invalid input.";
+
+            int nOut = GetNrCoordinateColumns(outputMode, nCoordCols);
+            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(oOptions);
+            if (!string.IsNullOrWhiteSpace(values.ErrorMessage))
+                return "#ERR: " + values.ErrorMessage;
+
+            CoordinateTransformOptions options = TransformOptions.CreateCoordinateTransformOptions(values);
 
             ProjContext pjContext = null;
             CoordinateReferenceSystem crsSource = null;
@@ -1033,13 +744,13 @@ namespace ProjExcel
 
         public static PPoint TransformPoint(int sourceEpsg, int targetEpsg, double x, double y, bool normalizeAxes = true)
         {
-            using (var context = CreateContext())
-            using (var source = CoordinateReferenceSystem.CreateFromEpsg(sourceEpsg, context))
-            using (var target = CoordinateReferenceSystem.CreateFromEpsg(targetEpsg, context))
+            using (var pjContext = CreateContext())
+            using (var source = CoordinateReferenceSystem.CreateFromEpsg(sourceEpsg, pjContext))
+            using (var target = CoordinateReferenceSystem.CreateFromEpsg(targetEpsg, pjContext))
             using (var transform = CreateCoordinateTransform(
                 normalizeAxes ? source.WithAxisNormalized() : source,
                 normalizeAxes ? target.WithAxisNormalized() : target,
-                context,
+                pjContext,
                 normalizeAxes))
             {
                 return transform.Apply(new PPoint(x, y));
@@ -1775,16 +1486,6 @@ namespace ProjExcel
             return candidates[0];
         }
 
-        private static CoordinateTransform GetSelectedTransform(CoordinateTransform transform, int candidateIndex)
-        {
-            List<CoordinateTransform> candidates = GetCandidateTransforms(transform);
-
-            if (candidateIndex < 0 || candidateIndex >= candidates.Count)
-                throw new ArgumentException("Transform candidate is not available");
-
-            return candidates[candidateIndex];
-        }
-
         private static CoordinateTransform TryGetCandidateTransform(
             CoordinateTransform transform,
             int candidateIndex,
@@ -1905,5 +1606,18 @@ namespace ProjExcel
 
             return result;
         }
+
+        private static bool HasAnyFiniteValues(double[] values, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (!double.IsNaN(values[i]) && !double.IsInfinity(values[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+
     }
 }
