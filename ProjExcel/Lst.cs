@@ -51,7 +51,7 @@ namespace ProjExcel
             }
         } // AuthorityList
 
-        private static string[] GetAuthorityList()
+        internal static string[] GetAuthorityList()
         {
             if (_authorityListCache != null)
                 return _authorityListCache;

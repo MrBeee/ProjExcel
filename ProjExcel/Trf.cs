@@ -22,6 +22,223 @@ namespace ProjExcel
             return ProjService.Default.CreateContext();
         }
 
+        // SharpProj supports the following options; try to find the relevant one automatically based on the input type.
+        // The following are the relevant Create() methods in SharpProj:
+
+        // public new unsafe static CoordinateReferenceSystem   Create(string[] from, [Optional] ProjContext ctx)
+        // public new unsafe static CoordinateReferenceSystem   Create(string from, [Optional] ProjContext ctx)
+
+        // public new unsafe static CoordinateReferenceSystem   CreateFromWellKnownText(string from, CreateFromWKTOptions options, out string[] warnings, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, out string[] warnings, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, CreateFromWKTOptions options, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, [Optional] ProjContext ctx)
+
+        // public static CoordinateReferenceSystem              CreateFromDatabase(Identifier identifier, [Optional] ProjContext ctx)
+        // public static CoordinateReferenceSystem              CreateFromDatabase(string authority, int code, [Optional] ProjContext ctx)
+        // public unsafe static CoordinateReferenceSystem       CreateFromDatabase(string authority, string code, [Optional] ProjContext ctx)
+
+        // public static CoordinateReferenceSystem              CreateFromEpsg(int epsgCode, [Optional] ProjContext ctx)
+
+        // The next routine allows for wider input than just epsg integer values; It returns a CoordinateReferenceSystem from various input types
+        // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
+        // It has implemented all above Creation methods, apart from the stringlist variant.
+
+        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oTransform, ProjContext pc)
+        {
+            if (Optional.IsEmpty(oTransform))
+                throw new ArgumentException("CRS specification is empty.");
+
+            if (oTransform is double)
+            {
+                // First cast to double, then to int, to deal with Excel datatypes
+                int nTransform = (int)(double)oTransform;
+
+                // we have an EPSG number from a single input parameter:
+                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc);
+            }
+            else if (oTransform is string)
+            {
+                // cast to string, to deal with Excel datatypes
+                string sTransform = (string)oTransform;
+
+                bool success = int.TryParse(sTransform, out int nTransform);
+
+                if (success)
+                {
+                    // we have a simple EPSG number
+                    return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc);
+                }
+                else
+                {
+                    // we have a string of some sorts. The first thing to check is if it starts with an Authority ID
+                    bool hasAuthorityPrefix = Lst.GetAuthorityList()
+                        .Any(authority => sTransform.StartsWith(authority + ":", StringComparison.OrdinalIgnoreCase));
+
+                    if (hasAuthorityPrefix)
+                    {
+                        // we have an authority prefix, so we can try to parse it as an authority code
+                        var parts = sTransform.Split(':');
+                        if (parts.Length == 2 && int.TryParse(parts[1], out nTransform))
+                        {
+                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], nTransform, pc);
+                        }
+                        else if (parts.Length == 2)
+                        {
+                            // If the second part is not an integer, we can try to create from a string code
+                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], parts[1], pc);
+                        }
+                        else
+                        {
+                            throw new ArgumentException("Invalid authority code format.");
+                        }
+                    }
+                    else
+                    {
+                        // We have NO authority prefix, so it must be a different type of string.
+                        // It could be a WKT string or a PROJ string. We can try to detect it by looking for certain keywords.
+                        if ((sTransform.IndexOf("PROJCRS") > -1) || (sTransform.IndexOf("GEOGCRS") > -1) || (sTransform.IndexOf("SPHEROID") > -1))
+                        {
+                            // it must be WKT (well, we hope so)
+                            return CoordinateReferenceSystem.CreateFromWellKnownText(sTransform, pc);
+
+                        }
+
+                        // Otherwise, assume it's a PROJ string
+                        return CoordinateReferenceSystem.Create(sTransform, pc);
+                    }
+                }
+            }
+            else
+            {
+                throw new ArgumentException("Unsupported CRS input type.");
+            }
+        }
+
+
+
+        [ExcelFunction(Name = "PE.trf.TransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
+        public static object TransformSteps(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS")] object TargetCrs,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            //int actualSourceCrs = Optional.Check(SourceCrs, 4326);
+            //int actualTargetCrs = Optional.Check(TargetCrs, 4326);
+
+            try
+            {
+                using (var pc = CreateContext())
+                {
+                    //using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
+                    //using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
+
+                    using (var src = CreateNormalizedCrs(SourceCrs, pc))
+                    using (var dst = CreateNormalizedCrs(TargetCrs, pc))
+                    {
+                        // Early-exit validation check (Saves CPU cycles before pipeline creation)
+                        if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
+                            return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
+
+                        CoordinateTransform trf = null;
+
+                        try
+                        {
+                            // Attempt #1: Try the absolute best precision transform path
+                            trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
+                        }
+                        catch (Exception ex) when (ex is ProjException || ex is ArgumentNullException)
+                        {
+                            // Fallback: If BestOnly caused a null pointer crash or missing grid exception, 
+                            // drop the strict constraint to allow the next best mathematical equation path.
+                            if (coordinateTransformOptions.BestOnly)
+                            {
+                                coordinateTransformOptions.BestOnly = false;
+                                trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
+                            }
+                            else
+                            {
+                                // If it wasn't a BestOnly issue, rethrow the original error
+                                throw;
+                            }
+                        }
+
+                        using (trf)
+                        {
+                            if (trf == null)
+                                return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                            CoordinateTransform selectedTransform = trf;
+
+                            // Handle explicit Multi-Candidate Selection wrappers if applicable
+                            if (optionValues.CandidateIndex > 0)
+                            {
+                                if (trf is ChooseCoordinateTransform list)
+                                {
+                                    if (optionValues.CandidateIndex >= list.Count)
+                                        return "#ERR: Candidate Index for transform out of range.";
+
+                                    selectedTransform = list[optionValues.CandidateIndex];
+                                }
+                                else
+                                {
+                                    return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                                }
+                            }
+
+
+                            // cct.cs line 3725 spew out TL.cct.Transforms.ListAll information
+                            CoordinateTransformList stepList = trf as CoordinateTransformList;
+
+                            int count = (stepList != null) ? stepList.Count : 1;
+
+                            object[,] result = new object[14, count + 1];
+
+                            result[0, 0] = "Transform Identifiers";
+                            result[1, 0] = "Transform Name";
+                            result[2, 0] = "Accuracy [m]";
+                            result[3, 0] = "Area of Use";
+                            result[4, 0] = "Scope";
+                            result[5, 0] = "Remarks";
+                            result[6, 0] = "Lon-min";
+                            result[7, 0] = "Lon-max";
+                            result[8, 0] = "Lat-min";
+                            result[9, 0] = "Lat-max";
+                            result[10, 0] = "Nr grids";
+                            result[11, 0] = "1st grid";
+                            result[12, 0] = "2nd grid";
+
+                            int nOutput = 0; // fix later
+
+                            switch (nOutput)
+                            {
+                                default:
+                                case 0:
+                                    result[13, 0] = "Transform PROJ string";
+                                    break;
+                                case 1:
+                                    result[13, 0] = "Transform WKT string";
+                                    break;
+                                case 2:
+                                    result[13, 0] = "Transform JSON string";
+                                    break;
+                            }
+                            return result;
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
 
 
         [ExcelFunction(Name = "PE.trf.Transform", Description = "Transform a point from source CRS to target CRS")]
