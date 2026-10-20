@@ -114,28 +114,41 @@ namespace ProjExcel
             }
         }
 
+        internal static int ParseOutputString(object value)
+        {
+            string output = Convert.ToString(value);
 
+            if (string.IsNullOrWhiteSpace(output))
+                return 0;
+
+            if (string.Equals(output, "Proj", StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            if (string.Equals(output, "Wkt", StringComparison.OrdinalIgnoreCase))
+                return 1;
+
+            if (string.Equals(output, "Json", StringComparison.OrdinalIgnoreCase))
+                return 2;
+
+            return 0;
+        }
 
         [ExcelFunction(Name = "PE.trf.TransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
         public static object TransformSteps(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS")] object TargetCrs,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options,
+            [ExcelArgument(Name = "outputString", Description = "Proj, Wkt or Json (Proj)")] object outputString = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
             CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
-
-            //int actualSourceCrs = Optional.Check(SourceCrs, 4326);
-            //int actualTargetCrs = Optional.Check(TargetCrs, 4326);
+            int actualOutputString = ParseOutputString(outputString);
 
             try
             {
                 using (var pc = CreateContext())
                 {
-                    //using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
-                    //using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
-
                     using (var src = CreateNormalizedCrs(SourceCrs, pc))
                     using (var dst = CreateNormalizedCrs(TargetCrs, pc))
                     {
@@ -194,7 +207,7 @@ namespace ProjExcel
 
 
                             // cct.cs line 3725 spew out TL.cct.Transforms.ListAll information
-                            CoordinateTransformList stepList = trf as CoordinateTransformList;
+                            CoordinateTransformList stepList = selectedTransform as CoordinateTransformList;
 
                             int count = (stepList != null) ? stepList.Count : 1;
 
@@ -203,20 +216,18 @@ namespace ProjExcel
                             result[0, 0] = "Transform Identifiers";
                             result[1, 0] = "Transform Name";
                             result[2, 0] = "Accuracy [m]";
-                            result[3, 0] = "Area of Use";
+                            result[3, 0] = "UsageArea";
                             result[4, 0] = "Scope";
                             result[5, 0] = "Remarks";
-                            result[6, 0] = "Lon-min";
-                            result[7, 0] = "Lon-max";
-                            result[8, 0] = "Lat-min";
-                            result[9, 0] = "Lat-max";
+                            result[6, 0] = "UsageArea.WestLongitude";
+                            result[7, 0] = "UsageArea.SouthLatitude";
+                            result[8, 0] = "UsageArea.EastLongitude";
+                            result[9, 0] = "UsageArea.NorthLatitude";
                             result[10, 0] = "Nr grids";
                             result[11, 0] = "1st grid";
                             result[12, 0] = "2nd grid";
 
-                            int nOutput = 0; // fix later
-
-                            switch (nOutput)
+                            switch (actualOutputString)
                             {
                                 default:
                                 case 0:
@@ -229,6 +240,162 @@ namespace ProjExcel
                                     result[13, 0] = "Transform JSON string";
                                     break;
                             }
+
+                            // now give it some info
+
+                            if (count == 1)
+                            {
+                                string ids = selectedTransform.Identifier?.ToString();
+                                string scopes = Optional.CheckUnknown(selectedTransform.Scope);
+                                string remarks = Optional.CheckUnknown(selectedTransform.Remarks, "None");
+                                if (ids == null && selectedTransform is CoordinateTransformList ctl)
+                                {
+                                    ids = string.Join(", ", ctl.Where(x => x.Identifiers != null).SelectMany(x => x.Identifiers));
+                                    scopes = string.Join("  ", ctl.Select(x => x.Scope).Where(x => x != null).Distinct());
+                                    remarks = string.Join("  ", ctl.Select(x => x.Remarks).Where(x => x != null).Distinct());
+
+                                    ids = Optional.CheckUnknown(ids.TrimStart(' ', ','));
+                                    scopes = Optional.CheckUnknown(scopes.TrimStart(' ', ','));
+                                    remarks = Optional.CheckUnknown(remarks.TrimStart(' ', ','), "None");
+                                }
+
+                                double? accuracy = coordinateTransformOptions.Accuracy;
+
+                                string grid1 = "N.A.";
+                                string grid2 = "N.A.";
+                                if (selectedTransform.GridUsages.Count > 0)
+                                {
+                                    grid1 = selectedTransform.GridUsages[0].FullName;
+                                    Optional.CheckUnknown(grid1, "Missing");
+                                }
+
+                                if (selectedTransform.GridUsages.Count > 1)
+                                {
+                                    grid2 = selectedTransform.GridUsages[1].FullName;
+                                    Optional.CheckUnknown(grid2, "Missing");
+                                }
+
+                                result[0, 1] = selectedTransform.Identifiers is null ? ids : selectedTransform.Identifier.Authority; ;
+                                result[1, 1] = selectedTransform.Name;
+                                result[2, 1] = accuracy;
+                                result[4, 1] = scopes;
+                                result[5, 1] = remarks;
+
+                                if (selectedTransform.UsageArea != null)
+                                {
+                                    result[3, 1] = selectedTransform.UsageArea.Name;
+                                    result[6, 1] = selectedTransform.UsageArea.WestLongitude;
+                                    result[7, 1] = selectedTransform.UsageArea.EastLongitude;
+                                    result[8, 1] = selectedTransform.UsageArea.SouthLatitude;
+                                    result[9, 1] = selectedTransform.UsageArea.NorthLatitude;
+                                }
+                                else
+                                {
+                                    result[3, 1] = "Unknown";
+                                    result[6, 1] = -1000;
+                                    result[7, 1] = -1000;
+                                    result[8, 1] = -1000;
+                                    result[9, 1] = -1000;
+                                }
+
+                                result[10, 1] = selectedTransform.GridUsages.Count;
+                                result[11, 1] = grid1;
+                                result[12, 1] = grid2;
+
+                                switch (actualOutputString)
+                                {
+                                    default:
+                                    case 0:
+                                        result[13, 1] = selectedTransform.AsProjString();
+                                        break;
+                                    case 1:
+                                        result[13, 1] = selectedTransform.AsWellKnownText();
+                                        break;
+                                    case 2:
+                                        result[13, 1] = selectedTransform.AsProjJson();
+                                        break;
+                                }
+                            }
+                            else
+                            {
+                                for (int i = 0; i < count; i++)
+                                {
+                                    string ids = stepList[i].Identifier?.ToString();
+                                    string scopes = Optional.CheckUnknown(stepList[i].Scope);
+                                    string remarks = Optional.CheckUnknown(stepList[i].Remarks, "None");
+                                    if (ids == null && stepList[i] is CoordinateTransformList ctl)
+                                    {
+                                        ids = string.Join(", ", ctl.Where(x => x.Identifiers != null).SelectMany(x => x.Identifiers));
+                                        scopes = string.Join("  ", ctl.Select(x => x.Scope).Where(x => x != null).Distinct());
+                                        remarks = string.Join("  ", ctl.Select(x => x.Remarks).Where(x => x != null).Distinct());
+
+                                        ids = Optional.CheckUnknown(ids.TrimStart(' ', ','));
+                                        scopes = Optional.CheckUnknown(scopes.TrimStart(' ', ','));
+                                        remarks = Optional.CheckUnknown(remarks.TrimStart(' ', ','), "None");
+                                    }
+
+                                    double? accuracy = coordinateTransformOptions.Accuracy;
+
+                                    string grid1 = "N.A.";
+                                    string grid2 = "N.A.";
+
+                                    if (stepList[i].GridUsages.Count > 0)
+                                    {
+                                        grid1 = stepList[i].GridUsages[0].FullName;
+                                        Optional.CheckUnknown(grid1, "Missing");
+                                    }
+
+                                    if (stepList[i].GridUsages.Count > 1)
+                                    {
+                                        grid2 = stepList[i].GridUsages[1].FullName;
+                                        Optional.CheckUnknown(grid2, "Missing");
+                                    }
+
+                                    result[0, i + 1] = stepList[i].Identifiers is null ? ids : stepList[i].Identifier.Authority;
+                                    result[1, i + 1] = stepList[i].Name;
+                                    result[2, i + 1] = accuracy;
+                                    result[4, i + 1] = scopes;
+                                    result[5, i + 1] = remarks;
+                                    if (stepList[i].UsageArea != null)
+                                    {
+                                        result[3, i + 1] = stepList[i].UsageArea.Name;
+                                        result[6, i + 1] = stepList[i].UsageArea.WestLongitude;
+                                        result[7, i + 1] = stepList[i].UsageArea.EastLongitude;
+                                        result[8, i + 1] = stepList[i].UsageArea.SouthLatitude;
+                                        result[9, i + 1] = stepList[i].UsageArea.NorthLatitude;
+                                    }
+                                    else
+                                    {
+                                        result[3, 1] = "Unknown";
+                                        result[6, 1] = -1000;
+                                        result[7, 1] = -1000;
+                                        result[8, 1] = -1000;
+                                        result[9, 1] = -1000;
+                                    }
+
+                                    result[10, i + 1] = stepList[i].GridUsages.Count;
+                                    result[11, i + 1] = grid1;
+                                    result[12, i + 1] = grid2;
+
+                                    switch (actualOutputString)
+                                    {
+                                        default:
+                                        case 0:
+                                            result[13, i + 1] = stepList[i].AsProjString();
+                                            break;
+                                        case 1:
+                                            result[13, i + 1] = stepList[i].AsWellKnownText();
+                                            break;
+                                        case 2:
+                                            result[13, i + 1] = stepList[i].AsProjJson();
+                                            break;
+                                    }
+                                }
+                            }
+
+
+
+
                             return result;
                         }
                     }
@@ -1739,7 +1906,6 @@ namespace ProjExcel
             "SourceCRS",
             "TargetCRS",
             "Context",
-            "UsageArea",
             "UsageArea.Name",
             "UsageArea.WestLongitude",
             "UsageArea.SouthLatitude",
