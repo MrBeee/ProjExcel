@@ -54,7 +54,7 @@ namespace ProjExcel
                 int nTransform = (int)(double)oTransform;
 
                 // we have an EPSG number from a single input parameter:
-                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc);
+                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
             }
             else if (oTransform is string)
             {
@@ -66,7 +66,7 @@ namespace ProjExcel
                 if (success)
                 {
                     // we have a simple EPSG number
-                    return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc);
+                    return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
                 }
                 else
                 {
@@ -80,12 +80,12 @@ namespace ProjExcel
                         var parts = sTransform.Split(':');
                         if (parts.Length == 2 && int.TryParse(parts[1], out nTransform))
                         {
-                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], nTransform, pc);
+                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], nTransform, pc).WithNormalizedAxis(pc);
                         }
                         else if (parts.Length == 2)
                         {
                             // If the second part is not an integer, we can try to create from a string code
-                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], parts[1], pc);
+                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], parts[1], pc).WithNormalizedAxis(pc);
                         }
                         else
                         {
@@ -99,12 +99,12 @@ namespace ProjExcel
                         if ((sTransform.IndexOf("PROJCRS") > -1) || (sTransform.IndexOf("GEOGCRS") > -1) || (sTransform.IndexOf("SPHEROID") > -1))
                         {
                             // it must be WKT (well, we hope so)
-                            return CoordinateReferenceSystem.CreateFromWellKnownText(sTransform, pc);
+                            return CoordinateReferenceSystem.CreateFromWellKnownText(sTransform, pc).WithNormalizedAxis(pc);
 
                         }
 
                         // Otherwise, assume it's a PROJ string
-                        return CoordinateReferenceSystem.Create(sTransform, pc);
+                        return CoordinateReferenceSystem.Create(sTransform, pc).WithNormalizedAxis(pc);
                     }
                 }
             }
@@ -182,29 +182,28 @@ namespace ProjExcel
                             }
                         }
 
+
                         using (trf)
                         {
+                            CoordinateTransform selectedTransform = null;
+
                             if (trf == null)
                                 return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                            CoordinateTransform selectedTransform = trf;
-
-                            // Handle explicit Multi-Candidate Selection wrappers if applicable
-                            if (optionValues.CandidateIndex > 0)
+                            if (trf is ChooseCoordinateTransform list)
                             {
-                                if (trf is ChooseCoordinateTransform list)
-                                {
-                                    if (optionValues.CandidateIndex >= list.Count)
-                                        return "#ERR: Candidate Index for transform out of range.";
+                                if (optionValues.CandidateIndex >= list.Count)
+                                    return "#ERR: Candidate Index for transform out of range.";
 
-                                    selectedTransform = list[optionValues.CandidateIndex];
-                                }
-                                else
-                                {
-                                    return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                                }
+                                selectedTransform = list[optionValues.CandidateIndex];
                             }
-
+                            else
+                            {
+                                if (optionValues.CandidateIndex >= 1)
+                                    return "#ERR: Candidate Index for transform out of range.";
+                                
+                                selectedTransform = trf;    
+                            }
 
                             // cct.cs line 3725 spew out TL.cct.Transforms.ListAll information
                             CoordinateTransformList stepList = selectedTransform as CoordinateTransformList;
@@ -237,7 +236,7 @@ namespace ProjExcel
                             {
                                 default:
                                 case 0:
-                                    result[14, 0] = "Step ROJ string";
+                                    result[14, 0] = "Step PROJ string";
                                     break;
                                 case 1:
                                     result[14, 0] = "Step WKT string";
@@ -372,35 +371,32 @@ namespace ProjExcel
                                     }
                                     else
                                     {
-                                        result[3, 1] = "Unknown";
-                                        result[6, 1] = -1000;
+                                        result[4, 1] = "Unknown";
                                         result[7, 1] = -1000;
                                         result[8, 1] = -1000;
                                         result[9, 1] = -1000;
+                                        result[10, 1] = -1000;
                                     }
 
-                                    result[10, i + 1] = stepList[i].GridUsages.Count;
-                                    result[11, i + 1] = grid1;
-                                    result[12, i + 1] = grid2;
+                                    result[11, i + 1] = stepList[i].GridUsages.Count;
+                                    result[12, i + 1] = grid1;
+                                    result[13, i + 1] = grid2;
 
                                     switch (actualOutputString)
                                     {
                                         default:
                                         case 0:
-                                            result[13, i + 1] = stepList[i].AsProjString();
+                                            result[14, i + 1] = stepList[i].AsProjString();
                                             break;
                                         case 1:
-                                            result[13, i + 1] = stepList[i].AsWellKnownText();
+                                            result[14, i + 1] = stepList[i].AsWellKnownText();
                                             break;
                                         case 2:
-                                            result[13, i + 1] = stepList[i].AsProjJson();
+                                            result[14, i + 1] = stepList[i].AsProjJson();
                                             break;
                                     }
                                 }
                             }
-
-
-
 
                             return result;
                         }
@@ -556,6 +552,7 @@ namespace ProjExcel
                         }
 
                         List<CoordinateTransform> candidates = new List<CoordinateTransform>();
+
                         if (trf is ChooseCoordinateTransform list)
                         {
                             for (int i = 0; i < list.Count; i++)
