@@ -140,6 +140,53 @@ namespace ProjExcel
             return value.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
+        private static bool HasExplicitCreateOptions(TransformOptions.CoordinateTransformOptionsInput optionValues)
+        {
+            if (optionValues == null)
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(optionValues.Authority))
+                return true;
+
+            if (optionValues.Accuracy.HasValue)
+                return true;
+
+            if (optionValues.Area != null)
+                return true;
+
+            if (optionValues.NoBallparkConversions ||
+                optionValues.NoDiscardIfMissing ||
+                optionValues.UsePrimaryGridNames ||
+                optionValues.UseSuperseded ||
+                optionValues.StrictContains ||
+                optionValues.BestOnly ||
+                optionValues.ForceOver)
+                return true;
+
+            return optionValues.IntermediateCrsUsage != IntermediateCrsUsage.Auto;
+        }
+
+        private static CoordinateTransform CreateTransformWithOptionalOptions(
+            CoordinateReferenceSystem src,
+            CoordinateReferenceSystem dst,
+            TransformOptions.CoordinateTransformOptionsInput optionValues,
+            CoordinateTransformOptions coordinateTransformOptions,
+            ProjContext pc)
+        {
+            if (!HasExplicitCreateOptions(optionValues))
+                return CoordinateTransform.Create(src, dst, pc);
+
+            try
+            {
+                return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
+            }
+            catch (Exception ex) when ((ex is ProjException || ex is ArgumentNullException) && coordinateTransformOptions.BestOnly)
+            {
+                coordinateTransformOptions.BestOnly = false;
+                return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
+            }
+        }
+
         [ExcelFunction(Name = "PE.trf.TransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
         public static object TransformSteps(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS")] object SourceCrs,
@@ -166,29 +213,7 @@ namespace ProjExcel
                         if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                             return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
 
-                        CoordinateTransform trf = null;
-
-                        try
-                        {
-                            // Attempt #1: Try the absolute best precision transform path
-                            trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                        }
-                        catch (Exception ex) when (ex is ProjException || ex is ArgumentNullException)
-                        {
-                            // Fallback: If BestOnly caused a null pointer crash or missing grid exception, 
-                            // drop the strict constraint to allow the next best mathematical equation path.
-                            if (coordinateTransformOptions.BestOnly)
-                            {
-                                coordinateTransformOptions.BestOnly = false;
-                                trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                            }
-                            else
-                            {
-                                // If it wasn't a BestOnly issue, rethrow the original error
-                                throw;
-                            }
-                        }
-
+                        CoordinateTransform trf = CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc);
 
                         using (trf)
                         {
@@ -423,28 +448,7 @@ namespace ProjExcel
                         if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                             return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
 
-                        CoordinateTransform trf = null;
-
-                        try
-                        {
-                            // Attempt #1: Try the absolute best precision transform path
-                            trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                        }
-                        catch (Exception ex) when (ex is ProjException || ex is ArgumentNullException)
-                        {
-                            // Fallback: If BestOnly caused a null pointer crash or missing grid exception, 
-                            // drop the strict constraint to allow the next best mathematical equation path.
-                            if (coordinateTransformOptions.BestOnly)
-                            {
-                                coordinateTransformOptions.BestOnly = false;
-                                trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                            }
-                            else
-                            {
-                                // If it wasn't a BestOnly issue, rethrow the original error
-                                throw;
-                            }
-                        }
+                        CoordinateTransform trf = CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc);
 
                         using (trf)
                         {
@@ -534,28 +538,7 @@ namespace ProjExcel
                         if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                             return "#ERR: Destination CRS is deprecated and AllowDeprecatedCrs option is not set.";
 
-                        CoordinateTransform trf = null;
-
-                        try
-                        {
-                            // Attempt #1: Try the absolute best precision transform path
-                            trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                        }
-                        catch (Exception ex) when (ex is ProjException || ex is ArgumentNullException)
-                        {
-                            // Fallback: If BestOnly caused a null pointer crash or missing grid exception, 
-                            // drop the strict constraint to allow the next best mathematical equation path.
-                            if (coordinateTransformOptions.BestOnly)
-                            {
-                                coordinateTransformOptions.BestOnly = false;
-                                trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                            }
-                            else
-                            {
-                                // If it wasn't a BestOnly issue, rethrow the original error
-                                throw;
-                            }
-                        }
+                        CoordinateTransform trf = CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc);
 
                         List<CoordinateTransform> candidates = new List<CoordinateTransform>();
 
@@ -625,7 +608,7 @@ namespace ProjExcel
                 {
                     using (var src = CoordinateReferenceSystem.CreateFromEpsg(4326, pc).WithNormalizedAxis(pc))
                     using (var dst = CoordinateReferenceSystem.CreateFromEpsg(3857, pc).WithNormalizedAxis(pc))
-                    using (var trf = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
+                    using (var trf = CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc))
                     {
                         if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                             return "#ERR: Source CRS is deprecated and AllowDeprecatedCrs option is not set.";
@@ -1409,9 +1392,19 @@ namespace ProjExcel
                 {
                     using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
                     using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
-                    using (var trf = CoordinateTransform.Create(src, dst))
+                    using (var trf = CoordinateTransform.Create(src, dst, pc))
                     {
-                        List<global::SharpProj.CoordinateTransform> candidates = GetCandidateTransforms(trf);
+                        List<global::SharpProj.CoordinateTransform> candidates = new List<global::SharpProj.CoordinateTransform>();
+                        if (trf is global::SharpProj.ChooseCoordinateTransform list)
+                        {
+                            for (int i = 0; i < list.Count; i++)
+                                candidates.Add(list[i]);
+                        }
+                        else
+                        {
+                            candidates.Add(trf);
+                        }
+
                         bool hasMultipleCandidates = trf is global::SharpProj.ChooseCoordinateTransform && candidates.Count > 1;
 
                         var rows = new List<object[]>()
@@ -1454,6 +1447,70 @@ namespace ProjExcel
                         return ToObjectTable(rows);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                return new object[,] { { "#ERR: " + ex.Message } };
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.DebugTransformCandidates", Description = "Diagnostic view of transform candidate counts for different creation paths")]
+        public static object[,] DebugTransformCandidates(
+            [ExcelArgument(Name = "Source CRS", Description = "Optional EPSG number of source CRS. Default = 4326")] object sourceCrs = null,
+            [ExcelArgument(Name = "Destination CRS", Description = "Optional EPSG number of destination CRS. Default = 3857")] object targetCrs = null,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()") ] object options = null)
+        {
+            try
+            {
+                int actualSourceCrs = Optional.Check(sourceCrs, 4326);
+                int actualTargetCrs = Optional.Check(targetCrs, 3857);
+
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+                var rows = new List<object[]>
+                {
+                    new object[] { "Path", "Type", "DirectCount", "RankedCount" },
+                    new object[] { "HasExplicitCreateOptions", HasExplicitCreateOptions(optionValues), null, null }
+                };
+
+                using (var pc = CreateContext())
+                using (var src = CoordinateReferenceSystem.CreateFromEpsg(actualSourceCrs, pc).WithNormalizedAxis(pc))
+                using (var dst = CoordinateReferenceSystem.CreateFromEpsg(actualTargetCrs, pc).WithNormalizedAxis(pc))
+                {
+                    using (var rawWithContext = CoordinateTransform.Create(src, dst, pc))
+                    {
+                        List<CoordinateTransform> direct = GetDirectCandidates(rawWithContext);
+                        List<CoordinateTransform> ranked = GetCandidateTransforms(rawWithContext, new CoordinateTransformOptions());
+                        rows.Add(new object[] { "Create(src,dst,pc)", rawWithContext.GetType().Name, direct.Count, ranked.Count });
+                        AddCandidateRows(rows, "Raw", direct);
+                    }
+
+                    using (var semantic = CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc))
+                    {
+                        List<CoordinateTransform> direct = GetDirectCandidates(semantic);
+                        List<CoordinateTransform> ranked = GetCandidateTransforms(semantic, coordinateTransformOptions);
+                        rows.Add(new object[] { "CreateTransformWithOptionalOptions", semantic.GetType().Name, direct.Count, ranked.Count });
+                        AddCandidateRows(rows, "Semantic", direct);
+                    }
+
+                    try
+                    {
+                        using (var optionsAlways = CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc))
+                        {
+                            List<CoordinateTransform> direct = GetDirectCandidates(optionsAlways);
+                            List<CoordinateTransform> ranked = GetCandidateTransforms(optionsAlways, coordinateTransformOptions);
+                            rows.Add(new object[] { "Create(src,dst,options,pc)", optionsAlways.GetType().Name, direct.Count, ranked.Count });
+                            AddCandidateRows(rows, "Options", direct);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        rows.Add(new object[] { "Create(src,dst,options,pc)", "#ERR", ex.Message, null });
+                    }
+                }
+
+                return ToObjectTable(rows);
             }
             catch (Exception ex)
             {
@@ -1609,24 +1666,10 @@ namespace ProjExcel
         private static List<PipelineCandidate> GetPipelineCandidates(CoordinateTransform transform)
         {
             var candidates = new List<PipelineCandidate>();
-            int index = 0;
+            if (transform == null)
+                return candidates;
 
-            foreach (object pipeline in GetPipelineObjects(transform))
-            {
-                candidates.Add(new PipelineCandidate
-                {
-                    Index = index++,
-                    Pipeline = pipeline,
-                    Name = GetStringProperty(pipeline, "Name") ?? "<unnamed>",
-                    Accuracy = GetNullableDoubleProperty(pipeline, "Accuracy"),
-                    IsAvailable = GetBoolProperty(pipeline, "IsAvailable", true),
-                    HasBallpark = GetBoolProperty(pipeline, "HasBallParkTransformation", false) || GetBoolProperty(pipeline, "HasBallparkTransformation", false),
-                    IsSuperseded = GetBoolProperty(pipeline, "IsSuperseded", false),
-                    UsageArea = GetCoordinateAreaProperty(pipeline, "UsageArea")
-                });
-            }
-
-            if (candidates.Count == 0 && transform != null)
+            if (!(transform is ChooseCoordinateTransform chooser))
             {
                 candidates.Add(new PipelineCandidate
                 {
@@ -1638,6 +1681,26 @@ namespace ProjExcel
                     HasBallpark = transform.HasBallParkTransformation,
                     IsSuperseded = false,
                     UsageArea = transform.UsageArea
+                });
+
+                return candidates;
+            }
+
+            int index = 0;
+
+            for (int i = 0; i < chooser.Count; i++)
+            {
+                object pipeline = chooser[i];
+                candidates.Add(new PipelineCandidate
+                {
+                    Index = index++,
+                    Pipeline = pipeline,
+                    Name = GetStringProperty(pipeline, "Name") ?? "<unnamed>",
+                    Accuracy = GetNullableDoubleProperty(pipeline, "Accuracy"),
+                    IsAvailable = GetBoolProperty(pipeline, "IsAvailable", true),
+                    HasBallpark = GetBoolProperty(pipeline, "HasBallParkTransformation", false) || GetBoolProperty(pipeline, "HasBallparkTransformation", false),
+                    IsSuperseded = GetBoolProperty(pipeline, "IsSuperseded", false),
+                    UsageArea = GetCoordinateAreaProperty(pipeline, "UsageArea")
                 });
             }
 
@@ -1797,25 +1860,49 @@ namespace ProjExcel
 
         private static List<CoordinateTransform> GetCandidateTransforms(CoordinateTransform transform)
         {
-            return GetCandidateTransforms(transform, new CoordinateTransformOptions());
+            return GetDirectCandidates(transform);
+        }
+
+        private static List<CoordinateTransform> GetDirectCandidates(CoordinateTransform transform)
+        {
+            var candidates = new List<CoordinateTransform>();
+
+            if (transform == null)
+                return candidates;
+
+            if (transform is ChooseCoordinateTransform list)
+            {
+                for (int i = 0; i < list.Count; i++)
+                    candidates.Add(list[i]);
+            }
+            else
+            {
+                candidates.Add(transform);
+            }
+
+            return candidates;
+        }
+
+        private static void AddCandidateRows(List<object[]> rows, string label, List<CoordinateTransform> candidates)
+        {
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                CoordinateTransform c = candidates[i];
+                rows.Add(new object[]
+                {
+                    label + "[" + i + "]",
+                    c == null ? string.Empty : c.Name,
+                    c == null ? string.Empty : Convert.ToString(c.Identifier),
+                    c == null ? null : (object)c.Accuracy,
+                    c != null && c.IsAvailable,
+                    c != null && c.HasBallParkTransformation
+                });
+            }
         }
 
         private static List<CoordinateTransform> GetCandidateTransforms(CoordinateTransform transform, CoordinateTransformOptions options)
         {
-            var ranked = RankPipelineCandidates(GetPipelineCandidates(transform), options);
-            var result = new List<CoordinateTransform>();
-
-            foreach (var candidate in ranked)
-            {
-                CoordinateTransform actual = CreateTransformFromPipeline(candidate.Pipeline);
-                if (actual != null)
-                    result.Add(actual);
-            }
-
-            if (result.Count == 0 && transform != null)
-                result.Add(transform);
-
-            return result;
+            return GetDirectCandidates(transform);
         }
 
 

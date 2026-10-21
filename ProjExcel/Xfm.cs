@@ -95,27 +95,11 @@ namespace ProjExcel
             if (transform == null)
                 yield break;
 
-            PropertyInfo pipelinesProperty = transform.GetType().GetProperty("Pipelines", BindingFlags.Instance | BindingFlags.Public);
-            if (pipelinesProperty != null)
+            if (transform is ChooseCoordinateTransform list)
             {
-                object pipelinesValue = pipelinesProperty.GetValue(transform, null);
-                var pipelinesEnumerable = pipelinesValue as System.Collections.IEnumerable;
-                if (pipelinesEnumerable != null)
+                for (int i = 0; i < list.Count; i++)
                 {
-                    foreach (object item in pipelinesEnumerable)
-                    {
-                        if (item != null)
-                            yield return item;
-                    }
-                    yield break;
-                }
-            }
-
-            var enumerable = transform as System.Collections.IEnumerable;
-            if (enumerable != null)
-            {
-                foreach (object item in enumerable)
-                {
+                    var item = list[i];
                     if (item != null)
                         yield return item;
                 }
