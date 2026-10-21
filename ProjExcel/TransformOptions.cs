@@ -434,26 +434,31 @@ namespace ProjExcel
         // So I need to check if these are needed in the future. For now, I will include them in the output string.
 
         [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for CoordinateTransformOptions settings")]
-        public static string Options2(
+        public static string Options(
             [ExcelArgument(Name = "Authority", Description = "Authority name (EPSG)")] object authority = null,
-
-            [ExcelArgument(Name = "WestLongitude", Description = "West longitude of area of interest (blank = none)")] object westLongitude = null,
-            [ExcelArgument(Name = "SouthLatitude", Description = "South latitude of area of interest (blank = none)")] object southLatitude = null,
-            [ExcelArgument(Name = "EastLongitude", Description = "East longitude of area of interest (blank = none)")] object eastLongitude = null,
-            [ExcelArgument(Name = "NorthLatitude", Description = "North latitude of area of interest (blank = none)")] object northLatitude = null,
-
             [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
-            [ExcelArgument(Name = "NoBallparkConversions", Description = "Disallow ballpark conversions (FALSE)")] object noBallparkConversions = null,
-            [ExcelArgument(Name = "NoDiscardIfMissing", Description = "Allow transforms even when a grid is missing (FALSE)")] object noDiscardIfMissing = null,
-            [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
-            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
-            [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
-            [ExcelArgument(Name = "IntermediateCrsUsage", Description = "Auto, Always or Never (Auto)")] object intermediateCrsUsage = null,
+
+            // Area of interest is defined by the bounding box coordinates: west, south, east, north.
+            // See proj proj_area_set_bbox() in D:\GitHub\proj\src\proj_area.c
+            [ExcelArgument(Name = "WestLongitude", Description = "West longitude of usage area (blank = none)")] object westLongitude = null,
+            [ExcelArgument(Name = "SouthLatitude", Description = "South latitude of usage area (blank = none)")] object southLatitude = null,
+            [ExcelArgument(Name = "EastLongitude", Description = "East longitude of usage area (blank = none)")] object eastLongitude = null,
+            [ExcelArgument(Name = "NorthLatitude", Description = "North latitude of usage area (blank = none)")] object northLatitude = null,
+
             [ExcelArgument(Name = "BestOnly", Description = "Use best transform only (FALSE)")] object bestOnly = null,
             [ExcelArgument(Name = "ForceOver", Description = "Force over-range longitude handling (FALSE)")] object forceOver = null,
+            [ExcelArgument(Name = "IntermediateCrsUsage", Description = "Auto, Always or Never (Auto)")] object intermediateCrsUsage = null,
 
-            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null,
-            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null
+            [ExcelArgument(Name = "NoBallparkConversions", Description = "Disallow ballpark conversions (FALSE)")] object noBallparkConversions = null,
+            [ExcelArgument(Name = "NoDiscardIfMissing", Description = "Allow transforms even when a grid is missing (FALSE)")] object noDiscardIfMissing = null,
+
+            [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
+
+            [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
+            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
+
+            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null,
+            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null
             )
         {
             string authorityValue = Convert.ToString(authority);
@@ -461,24 +466,29 @@ namespace ProjExcel
                 authorityValue = "EPSG";
 
             double? accuracyValue = ParseNullableDoubleOrDefault(accuracy, null);
+
             string areaValue = BuildAreaToken(westLongitude, southLatitude, eastLongitude, northLatitude);
 
             return string.Join("; ",
                 "Authority=" + authorityValue,
-
+                "Accuracy=" + (accuracyValue.HasValue ? Convert.ToString(accuracyValue.Value) : string.Empty),
                 "Area=" + areaValue,
 
-                "Accuracy=" + (accuracyValue.HasValue ? Convert.ToString(accuracyValue.Value) : string.Empty),
-                "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
-                "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
-                "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
-                "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
-                "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
-                "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
                 "BestOnly=" + ParseBooleanOrDefault(bestOnly, false),
+
                 "ForceOver=" + ParseBooleanOrDefault(forceOver, false),
 
-                "CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0),
+                "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
+
+                "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
+                "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
+
+                "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
+
+                "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
+                "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
+
+                "|| CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0),
                 "AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false)
                 );
         }
