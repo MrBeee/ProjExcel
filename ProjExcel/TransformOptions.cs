@@ -67,7 +67,7 @@ namespace ProjExcel
 
             public CoordinateTransformOptionsInput()
             {
-                Authority = "EPSG";
+                Authority = null;
                 Accuracy = null;
                 IntermediateCrsUsage = IntermediateCrsUsage.Auto;
             }
@@ -111,7 +111,7 @@ namespace ProjExcel
                     string value = keyValue[1].Trim();
 
                     if (string.Equals(key, "Authority", StringComparison.OrdinalIgnoreCase))
-                        values.Authority = string.IsNullOrWhiteSpace(value) ? "EPSG" : value;
+                        values.Authority = string.IsNullOrWhiteSpace(value) ? null : value;
                     else if (string.Equals(key, "Accuracy", StringComparison.OrdinalIgnoreCase))
                         values.Accuracy = ParseNullableDoubleOrDefault(value, null);
                     else if (string.Equals(key, "NoBallparkConversions", StringComparison.OrdinalIgnoreCase))
@@ -160,12 +160,10 @@ namespace ProjExcel
             var options = new CoordinateTransformOptions();
 
             if (values == null)
-            {
-                options.Authority = "EPSG";
                 return options;
-            }
 
-            options.Authority = string.IsNullOrWhiteSpace(values.Authority) ? "EPSG" : values.Authority;
+            if (!string.IsNullOrWhiteSpace(values.Authority))
+                options.Authority = values.Authority;
 
             if (values.Accuracy.HasValue)
                 options.Accuracy = values.Accuracy;
@@ -435,7 +433,7 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for CoordinateTransformOptions settings")]
         public static string Options(
-            [ExcelArgument(Name = "Authority", Description = "Authority name (EPSG)")] object authority = null,
+            [ExcelArgument(Name = "Authority", Description = "Authority name (blank = no authority filter)")] object authority = null,
             [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
 
             // Area of interest is defined by the bounding box coordinates: west, south, east, north.
@@ -462,8 +460,7 @@ namespace ProjExcel
             )
         {
             string authorityValue = Convert.ToString(authority);
-            if (string.IsNullOrWhiteSpace(authorityValue))
-                authorityValue = "EPSG";
+            authorityValue = string.IsNullOrWhiteSpace(authorityValue) ? string.Empty : authorityValue;
 
             double? accuracyValue = ParseNullableDoubleOrDefault(accuracy, null);
 
