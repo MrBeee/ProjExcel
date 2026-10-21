@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
@@ -92,6 +93,7 @@ namespace ProjExcel
                             throw new ArgumentException("Invalid authority code format.");
                         }
                     }
+
                     else
                     {
                         // We have NO authority prefix, so it must be a different type of string.
@@ -131,6 +133,11 @@ namespace ProjExcel
                 return 2;
 
             return 0;
+        }
+
+        private static string FormatCoordinateValue(double value)
+        {
+            return value.ToString("0.00", CultureInfo.InvariantCulture);
         }
 
         [ExcelFunction(Name = "PE.trf.TransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
@@ -206,37 +213,7 @@ namespace ProjExcel
                             }
 
                             List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
-                            int stepCount = steps.Count;
-
-                            object[,] result = new object[15, stepCount + 1];
-
-                            result[0, 0] = "Step Number";
-                            for (int stepIndex = 0; stepIndex < stepCount; stepIndex++)
-                            {
-                                result[0, stepIndex + 1] = stepIndex;
-                            }
-
-                            result[1, 0] = "Step Identifiers";
-                            result[2, 0] = "Step Name";
-                            result[3, 0] = "Step accuracy [m]";
-                            result[4, 0] = "UsageArea";
-                            result[5, 0] = "Scope";
-                            result[6, 0] = "Remarks";
-                            result[7, 0] = "UsageArea.WestLongitude";
-                            result[8, 0] = "UsageArea.SouthLatitude";
-                            result[9, 0] = "UsageArea.EastLongitude";
-                            result[10, 0] = "UsageArea.NorthLatitude";
-                            result[11, 0] = "Nr grids";
-                            result[12, 0] = "1st grid";
-                            result[13, 0] = "2nd grid";
-                            result[14, 0] = GetTransformStepOutputHeader(actualOutputString);
-
-                            for (int i = 0; i < stepCount; i++)
-                            {
-                                FillTransformStepColumn(result, i + 1, steps[i], actualOutputString);
-                            }
-
-                            return result;
+                            return BuildTransformStepsResult(steps, actualOutputString);
                         }
                     }
                 }
@@ -247,6 +224,24 @@ namespace ProjExcel
             }
         }
 
+        private static readonly string[] TransformStepAspectNames = new[]
+        {
+            "Step Name",
+            "Step MethodName",
+            "Step Identifier",
+            "Step accuracy [m]",
+            "Step scopee",
+            "Remarks",
+            "Nr grids",
+            "Name 1st grid",
+            "Name 2nd grid",
+            "UsageArea.Name",
+            "UsageArea.WestLongitude",
+            "UsageArea.SouthLatitude",
+            "UsageArea.EastLongitude",
+            "UsageArea.NorthLatitude"
+        };
+
         private static List<CoordinateTransform> GetTransformSteps(CoordinateTransform selectedTransform)
         {
             CoordinateTransformList stepList = selectedTransform as CoordinateTransformList;
@@ -254,6 +249,102 @@ namespace ProjExcel
                 return new List<CoordinateTransform> { selectedTransform };
 
             return stepList.ToList();
+        }
+
+        private static object[,] BuildTransformStepsResult(IList<CoordinateTransform> steps, int outputString)
+        {
+            int stepCount = steps == null ? 0 : steps.Count;
+            object[,] result = new object[TransformStepAspectNames.Length + 2, stepCount + 1];
+
+            result[0, 0] = "Step Number";
+            for (int stepIndex = 0; stepIndex < stepCount; stepIndex++)
+            {
+                result[0, stepIndex + 1] = stepIndex;
+            }
+
+            for (int row = 0; row < TransformStepAspectNames.Length; row++)
+            {
+                result[row + 1, 0] = TransformStepAspectNames[row];
+            }
+
+            result[TransformStepAspectNames.Length + 1, 0] = GetTransformStepOutputHeader(outputString);
+
+            for (int stepIndex = 0; stepIndex < stepCount; stepIndex++)
+            {
+                object[] values = GetTransformStepAspectValues(steps[stepIndex], outputString);
+                for (int row = 0; row < values.Length; row++)
+                {
+                    result[row + 1, stepIndex + 1] = values[row];
+                }
+            }
+
+            return result;
+        }
+
+        private static object[] GetTransformStepAspectValues(CoordinateTransform transformStep, int outputString)
+        {
+            string ids;
+            string scopes;
+            string remarks;
+            
+            GetTransformIdentifierScopeRemarks(transformStep, out ids, out scopes, out remarks);
+
+            string grid1 = "n/a";
+            string grid2 = "n/a";
+
+            if (transformStep.GridUsages.Count > 0)
+            {
+                grid1 = transformStep.GridUsages[0].Name;
+                grid1 = Optional.CheckUnknown(grid1, "Missing");
+            }
+
+            if (transformStep.GridUsages.Count > 1)
+            {
+                grid2 = transformStep.GridUsages[1].Name;
+                grid2 = Optional.CheckUnknown(grid2, "Missing");
+            }
+
+            object usageAreaName;
+            object westLongitude;
+            object southLatitude;
+            object eastLongitude;
+            object northLatitude;
+
+            if (transformStep.UsageArea != null)
+            {
+                usageAreaName = transformStep.UsageArea.Name;
+                westLongitude = FormatCoordinateValue(transformStep.UsageArea.WestLongitude);
+                southLatitude = FormatCoordinateValue(transformStep.UsageArea.SouthLatitude);
+                eastLongitude = FormatCoordinateValue(transformStep.UsageArea.EastLongitude);
+                northLatitude = FormatCoordinateValue(transformStep.UsageArea.NorthLatitude);
+            }
+            else
+            {
+                usageAreaName = "Undefined";
+                westLongitude = "";
+                southLatitude = "";
+                eastLongitude = "";
+                northLatitude = "";
+            }
+
+            return new object[]
+            {
+                transformStep.Name,
+                transformStep.MethodName,
+                transformStep.Identifier is null ? "" : transformStep.Identifier.ToString(),
+                transformStep.Accuracy is null ? (object)"" : (object)transformStep.Accuracy.Value,
+                scopes,
+                remarks,
+                transformStep.GridUsages.Count,
+                grid1,
+                grid2,
+                usageAreaName,
+                westLongitude,
+                southLatitude,
+                eastLongitude,
+                northLatitude,
+                GetTransformStepOutputValue(transformStep, outputString)
+            };
         }
 
         private static string GetTransformStepOutputHeader(int outputString)
@@ -284,63 +375,11 @@ namespace ProjExcel
             }
         }
 
-        private static void FillTransformStepColumn(object[,] result, int columnIndex, CoordinateTransform transformStep, int outputString)
-        {
-            string ids;
-            string scopes;
-            string remarks;
-            GetTransformIdentifierScopeRemarks(transformStep, out ids, out scopes, out remarks);
-
-            string grid1 = "N.A.";
-            string grid2 = "N.A.";
-
-            if (transformStep.GridUsages.Count > 0)
-            {
-                grid1 = transformStep.GridUsages[0].FullName;
-                Optional.CheckUnknown(grid1, "Missing");
-            }
-
-            if (transformStep.GridUsages.Count > 1)
-            {
-                grid2 = transformStep.GridUsages[1].FullName;
-                Optional.CheckUnknown(grid2, "Missing");
-            }
-
-            result[1, columnIndex] = transformStep.Identifiers is null ? ids : transformStep.Identifier.Authority;
-            result[2, columnIndex] = transformStep.Name;
-            result[3, columnIndex] = transformStep.Accuracy is null ? (object)"" : (object)transformStep.Accuracy.Value;
- 
-            result[5, columnIndex] = scopes;
-            result[6, columnIndex] = remarks;
-
-            if (transformStep.UsageArea != null)
-            {
-                result[4, columnIndex] = transformStep.UsageArea.Name;
-                result[7, columnIndex] = transformStep.UsageArea.WestLongitude;
-                result[8, columnIndex] = transformStep.UsageArea.SouthLatitude;
-                result[9, columnIndex] = transformStep.UsageArea.EastLongitude;
-                result[10, columnIndex] = transformStep.UsageArea.NorthLatitude;
-            }
-            else
-            {
-                result[4, columnIndex] = "Unknown";
-                result[7, columnIndex] = -1000;
-                result[8, columnIndex] = -1000;
-                result[9, columnIndex] = -1000;
-                result[10, columnIndex] = -1000;
-            }
-
-            result[11, columnIndex] = transformStep.GridUsages.Count;
-            result[12, columnIndex] = grid1;
-            result[13, columnIndex] = grid2;
-            result[14, columnIndex] = GetTransformStepOutputValue(transformStep, outputString);
-        }
-
         private static void GetTransformIdentifierScopeRemarks(CoordinateTransform transform, out string ids, out string scopes, out string remarks)
         {
             ids = transform?.Identifier?.ToString();
             scopes = Optional.CheckUnknown(transform?.Scope);
-            remarks = Optional.CheckUnknown(transform?.Remarks, "None");
+            remarks = Optional.CheckUnknown(transform?.Remarks, "");
 
             if (ids == null && transform is CoordinateTransformList ctl)
             {
@@ -350,7 +389,7 @@ namespace ProjExcel
 
                 ids = Optional.CheckUnknown(ids.TrimStart(' ', ','));
                 scopes = Optional.CheckUnknown(scopes.TrimStart(' ', ','));
-                remarks = Optional.CheckUnknown(remarks.TrimStart(' ', ','), "None");
+                remarks = Optional.CheckUnknown(remarks.TrimStart(' ', ','), "");
             }
         }
 
@@ -1862,7 +1901,6 @@ namespace ProjExcel
         {
             "Transform Name",
             "Transform Type",
-            "Identifier",
             "Identifiers",
             "Accuracy",
             "IsAvailable",
@@ -1881,7 +1919,8 @@ namespace ProjExcel
             "UsageArea.SouthLatitude",
             "UsageArea.EastLongitude",
             "UsageArea.NorthLatitude",
-            "UsageArea.Center"
+            "UsageArea.CenterX",
+            "UsageArea.CenterY"
         };
 
         private static object[,] BuildTransformListResult(IList<CoordinateTransform> candidates, string nullValueText, bool bTranspose)
@@ -1944,7 +1983,6 @@ namespace ProjExcel
             {
                 SafeCandidateValue(candidate == null ? null : (object)candidate.Name, nullValueText),
                 SafeCandidateValue(candidate == null ? null : (object)candidate.Type, nullValueText),
-                SafeCandidateValue(candidate == null ? null : (object)(candidate.Identifiers is null ? ids : candidate.Identifier?.Authority), nullValueText),
                 SafeCandidateValue(candidate == null ? null : (object)ids, nullValueText),
                 SafeCandidateValue(candidate == null ? null : (object)candidate.Accuracy, nullValueText),
                 SafeCandidateValue(candidate == null ? null : (object)candidate.IsAvailable, nullValueText),
@@ -1959,13 +1997,12 @@ namespace ProjExcel
                 SafeCandidateValue(candidate == null ? null : (object)candidate.TargetCRS, nullValueText),
                 SafeCandidateContextValue(candidate, nullValueText),
                 SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.Name, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.WestLongitude, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.SouthLatitude, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.EastLongitude, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.NorthLatitude, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null :
-                    (object)$"{(areaBounds.WestLongitude + areaBounds.EastLongitude) / 2.0}, {(areaBounds.SouthLatitude + areaBounds.NorthLatitude) / 2.0}",
-                    nullValueText)
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.WestLongitude), nullValueText),
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.SouthLatitude), nullValueText),
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.EastLongitude), nullValueText),
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.NorthLatitude), nullValueText),
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.CenterX), nullValueText),
+                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.CenterY), nullValueText)
             };
         }
 
