@@ -149,7 +149,6 @@ namespace ProjExcel
 
             return defaultValue;
         }
-
         private static double? GetNullableDoubleProperty(object target, string propertyName)
         {
             var value = GetPropertyValue(target, propertyName);
