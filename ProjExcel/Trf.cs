@@ -41,7 +41,7 @@ namespace ProjExcel
 
         // The next routine allows for wider input than just epsg integer values; It returns a CoordinateReferenceSystem from various input types
         // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
-        // It has implemented all above Creation methods, apart from the stringlist variant.
+        // It has implemented all above Creation methods, apart from the stringlist variant: (string[] from).
 
         internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oTransform, ProjContext pc)
         {
