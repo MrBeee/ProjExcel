@@ -43,23 +43,23 @@ namespace ProjExcel
         // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
         // It has implemented all above Creation methods, apart from the stringlist variant: (string[] from).
 
-        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oTransform, ProjContext pc)
+        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oCrs, ProjContext pc)
         {
-            if (Optional.IsEmpty(oTransform))
+            if (Optional.IsEmpty(oCrs))
                 throw new ArgumentException("CRS specification is empty.");
 
-            if (oTransform is double)
+            if (oCrs is double)
             {
                 // First cast to double, then to int, to deal with Excel datatypes
-                int nTransform = (int)(double)oTransform;
+                int nTransform = (int)(double)oCrs;
 
                 // we have an EPSG number from a single input parameter:
                 return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
             }
-            else if (oTransform is string)
+            else if (oCrs is string)
             {
                 // cast to string, to deal with Excel datatypes
-                string sTransform = (string)oTransform;
+                string sTransform = (string)oCrs;
 
                 bool success = int.TryParse(sTransform, out int nTransform);
 

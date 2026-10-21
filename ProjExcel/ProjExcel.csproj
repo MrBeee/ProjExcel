@@ -61,6 +61,10 @@
     <ExcelDnaCreate32BitAddIn>false</ExcelDnaCreate32BitAddIn>
     <ExcelDnaCreate64BitAddIn>true</ExcelDnaCreate64BitAddIn>
   </PropertyGroup>
+  <PropertyGroup>
+    <SharpProjRuntime>win-x86</SharpProjRuntime>
+    <SharpProjRuntime Condition="'$(PlatformTarget)' == 'x64'">win-x64</SharpProjRuntime>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="ExcelDna.Integration, Version=1.1.0.0, Culture=neutral, PublicKeyToken=f225e9659857edbe, processorArchitecture=MSIL">
       <HintPath>..\packages\ExcelDna.Integration.1.10.0-preview5\lib\net462\ExcelDna.Integration.dll</HintPath>
@@ -71,8 +75,8 @@
     <Reference Include="MathNet.Numerics, Version=6.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\MathNet.Numerics.6.0.0-beta2\lib\net48\MathNet.Numerics.dll</HintPath>
     </Reference>
-    <Reference Include="SharpProj, Version=9.5001.295.0, Culture=neutral, PublicKeyToken=3a930e679d9a0873" Condition="'$(Platform)' == 'x64'">
-      <HintPath>..\packages\SharpProj.Core.9.5001.295\runtimes\win-x64\lib\net47\SharpProj.dll</HintPath>
+    <Reference Include="SharpProj, Version=9.5001.295.0, Culture=neutral, PublicKeyToken=3a930e679d9a0873">
+      <HintPath>..\packages\SharpProj.Core.9.5001.295\runtimes\$(SharpProjRuntime)\lib\net47\SharpProj.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -109,13 +113,13 @@
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\SharpProj.9.5001.295\build\SharpProj.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\SharpProj.9.5001.295\build\SharpProj.targets'))" />
     <Error Condition="!Exists('..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.props'))" />
     <Error Condition="!Exists('..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.targets'))" />
+    <Error Condition="!Exists('..\packages\SharpProj.9.5001.295\build\SharpProj.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\SharpProj.9.5001.295\build\SharpProj.targets'))" />
   </Target>
-  <Import Project="..\packages\SharpProj.9.5001.295\build\SharpProj.targets" Condition="Exists('..\packages\SharpProj.9.5001.295\build\SharpProj.targets')" />
   <Import Project="..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.targets" Condition="Exists('..\packages\ExcelDna.AddIn.1.10.0-preview5\build\ExcelDna.AddIn.targets')" />
   <PropertyGroup>
     <PreBuildEvent>powershell -ExecutionPolicy Bypass -File "$(ProjectDir)scripts\GenerateVersion.ps1" "$(ProjectDir)Properties\VersionInfo.g.cs"</PreBuildEvent>
   </PropertyGroup>
+  <Import Project="..\packages\SharpProj.9.5001.295\build\SharpProj.targets" Condition="Exists('..\packages\SharpProj.9.5001.295\build\SharpProj.targets')" />
 </Project>
