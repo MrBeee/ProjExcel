@@ -107,12 +107,12 @@ namespace ProjExcel
             return Convert.ToDateTime(arg, CultureInfo.CurrentCulture);
         }
 
-        internal static bool IsNul(object[,] arg)
+        internal static bool IsNul(object arg)
         {
-            if (arg == null || arg.Length == 0)
+            if (arg == null)
                 return true;
 
-            object value = arg[0, 0];
+            object value = arg;
 
             if (value == null || value is ExcelMissing || value is ExcelEmpty || value is ExcelError)
                 return true;

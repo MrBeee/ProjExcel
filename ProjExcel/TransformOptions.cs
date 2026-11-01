@@ -154,7 +154,8 @@ namespace ProjExcel
         }
 
         // this function returns the SharpProj CoordinateTransformOptions object, generated through an Excel UDF
-        // note that AllowDeprecatedCrs and CandidateIndex are not carried across
+        // note that AllowDeprecatedCrs and CandidateIndex are not part of CoordinateTransformOptions
+        // so they are not included in the returned object; they put restrictions on CRS and the define the selected transform when multiple transforms are available
         internal static CoordinateTransformOptions CreateCoordinateTransformOptions(CoordinateTransformOptionsInput values)
         {
             var options = new CoordinateTransformOptions();
@@ -431,8 +432,8 @@ namespace ProjExcel
         // 
         // So I need to check if these are needed in the future. For now, I will include them in the output string.
 
-        [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for CoordinateTransformOptions settings")]
-        public static string Options(
+        [ExcelFunction(Name = "PE.trf.TransformOptions", Description = "Creates an options token for CoordinateTransformOptions settings")]
+        public static string TransformOptionsSettings(
             [ExcelArgument(Name = "Authority", Description = "Authority name (blank = no authority filter)")] object authority = null,
             [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
 
@@ -470,24 +471,18 @@ namespace ProjExcel
                 "Authority=" + authorityValue,
                 "Accuracy=" + (accuracyValue.HasValue ? Convert.ToString(accuracyValue.Value) : string.Empty),
                 "Area=" + areaValue,
-
                 "BestOnly=" + ParseBooleanOrDefault(bestOnly, false),
-
                 "ForceOver=" + ParseBooleanOrDefault(forceOver, false),
-
                 "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
-
                 "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
                 "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
-
                 "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
-
                 "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
                 "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
 
-                "|| CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0),
-                "AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false)
-                );
+                "|| AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false),
+                "CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0)
+            );
         }
     }
 }

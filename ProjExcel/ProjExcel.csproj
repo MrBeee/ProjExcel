@@ -94,6 +94,7 @@
     <Compile Include="Deg.cs" />
     <Compile Include="ExcelValueConverters.cs" />
     <Compile Include="Gps.cs" />
+    <Compile Include="Lib.cs" />
     <Compile Include="Lst.cs" />
     <Compile Include="Optional.cs" />
     <Compile Include="ProjService.cs" />
