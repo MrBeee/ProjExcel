@@ -26,8 +26,8 @@ namespace ProjExcelBenchmarks
         }
 
         [Benchmark]
-        public object Transform128() => TransformFunctions.Transform(4326, 3857, x, y, null);
+        public object Transform128() => TransformFunctions.Apply(4326, 3857, x, y, null);
         [Benchmark]
-        public object TransformEx128() => TransformFunctions.TransformEx(4326, 3857, xyzt, null);
+        public object TransformEx128() => TransformFunctions.ApplyEx(4326, 3857, xyzt, null);
     }
 }

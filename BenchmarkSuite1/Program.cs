@@ -3,6 +3,9 @@
 // -----------------------------------------------------------------------
 
 using BenchmarkDotNet.Running;
+using BenchmarkDotNet.Configs;
+using System;
+using System.IO;
 
 namespace BenchmarkSuite1
 {
@@ -10,7 +13,8 @@ namespace BenchmarkSuite1
     {
         static void Main(string[] args)
         {
-            var _ = BenchmarkRunner.Run(typeof(Program).Assembly);
+            string artifactsPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\..\..\_bench"));
+            var _ = BenchmarkRunner.Run(typeof(Program).Assembly, DefaultConfig.Instance.WithArtifactsPath(artifactsPath));
         }
     }
 }

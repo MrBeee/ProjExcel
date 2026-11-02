@@ -400,8 +400,8 @@ namespace ProjExcel
             "UsageArea"
         };
 
-        [ExcelFunction(Name = "PE.trf.TransformProperties", Description = "List coordinate transform properties and their index")]
-        public static object TransformProperties()
+        [ExcelFunction(Name = "PE.trf.ListTransformProperties", Description = "List accessible coordinate transform properties by name and index")]
+        public static object ListTransformProperties()
         {
             string[] reflectedNames = typeof(CoordinateTransform)
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -432,11 +432,11 @@ namespace ProjExcel
             return result;
         }
 
-        [ExcelFunction(Name = "PE.trf.TransformProperty", Description = "Get a coordinate transform property by index or name")]
+        [ExcelFunction(Name = "PE.trf.TransformProperty", Description = "Get coordinate transform properties by index or name")]
         public static object TransformProperty(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "property", Description = "Property index or property name")] object property,
+            [ExcelArgument(Name = "property", Description = "Property index or name, or comma-separated property names/indices")] object property,
             [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()") ] object options = null,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default = \"<null>\"")] object nullValues = null
             )
@@ -447,8 +447,12 @@ namespace ProjExcel
 
             try
             {
-                int propertyIndex = ParseTransformPropertyIndex(property);
-                if (propertyIndex < 0 || propertyIndex >= TransformPropertyNames.Length)
+                bool multipleProperties = property is string names && names.Contains(",");
+                int[] propertyIndices = multipleProperties
+                    ? ((string)property).Split(',').Select(name => ParseTransformPropertyIndex(name.Trim())).ToArray()
+                    : new[] { ParseTransformPropertyIndex(property) };
+
+                if (propertyIndices.Any(index => index < 0 || index >= TransformPropertyNames.Length))
                     return "#ERR: Property index out of range.";
 
                 using (var pc = CreateContext())
@@ -457,23 +461,37 @@ namespace ProjExcel
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    if (TransformPropertyNames[propertyIndex] == "Count")
-                        return trf is ChooseCoordinateTransform candidates ? candidates.Count : 1;
-
+                    int count = trf is ChooseCoordinateTransform candidates ? candidates.Count : 1;
                     CoordinateTransform transformToUse = trf;
-                    if (trf is ChooseCoordinateTransform list)
+                    if (propertyIndices.Any(index => TransformPropertyNames[index] != "Count"))
                     {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
+                        if (trf is ChooseCoordinateTransform list)
+                        {
+                            if (optionValues.CandidateIndex >= list.Count)
+                                return "#ERR: Candidate Index for transform out of range.";
 
-                        transformToUse = list[optionValues.CandidateIndex];
+                            transformToUse = list[optionValues.CandidateIndex];
+                        }
+                        else if (optionValues.CandidateIndex > 0)
+                        {
+                            return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                        }
                     }
-                    else if (optionValues.CandidateIndex > 0)
+
+                    if (!multipleProperties)
+                        return TransformPropertyNames[propertyIndices[0]] == "Count"
+                            ? (object)count
+                            : GetTransformPropertyValue(transformToUse, propertyIndices[0], nullValueText);
+
+                    object[,] result = new object[1, propertyIndices.Length];
+                    for (int i = 0; i < propertyIndices.Length; i++)
                     {
-                        return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                        result[0, i] = TransformPropertyNames[propertyIndices[i]] == "Count"
+                            ? (object)count
+                            : GetTransformPropertyValue(transformToUse, propertyIndices[i], nullValueText);
                     }
 
-                    return GetTransformPropertyValue(transformToUse, propertyIndex, nullValueText);
+                    return result;
                 }
             }
             catch (System.Exception ex)
@@ -765,33 +783,55 @@ namespace ProjExcel
             }
         }
 
-        private static void GetTransformIdentifierScopeRemarks(CoordinateTransform transform, out string ids, out string scopes, out string remarks)
+        private static void GetTransformIdentifierScopeRemarks(CoordinateTransform transform, out string ids, out string scopes, out string remarks, string nullValueText = "Unknown")
         {
-            ids = transform?.Identifier?.ToString();
+            var identifier = transform?.Identifier;
+            ids = identifier?.Authority != null && identifier.Code != null
+                ? identifier.Authority + ":" + identifier.Code
+                : null;
             scopes = Optional.CheckUnknown(transform?.Scope);
             remarks = Optional.CheckUnknown(transform?.Remarks, "");
 
             if (ids == null && transform is CoordinateTransformList ctl)
             {
-                ids = string.Join(", ", ctl.Where(x => x.Identifiers != null).SelectMany(x => x.Identifiers));
+                ids = string.Join(", ", ctl.Where(x => x.Identifiers != null)
+                    .SelectMany(x => x.Identifiers)
+                    .Where(x => x != null && x.Authority != null && x.Code != null)
+                    .Select(x => x.Authority + ":" + x.Code));
                 scopes = string.Join("  ", ctl.Select(x => x.Scope).Where(x => x != null).Distinct());
                 remarks = string.Join("  ", ctl.Select(x => x.Remarks).Where(x => x != null).Distinct());
 
-                ids = Optional.CheckUnknown(ids.TrimStart(' ', ','));
+                ids = Optional.CheckUnknown(ids, nullValueText);
                 scopes = Optional.CheckUnknown(scopes.TrimStart(' ', ','));
                 remarks = Optional.CheckUnknown(remarks.TrimStart(' ', ','), "");
             }
         }
 
-
-        [ExcelFunction(Name = "PE.trf.Transform", Description = "Transform a point from source CRS to target CRS")]
-        public static object Transform(
+        [ExcelFunction(Name = "PE.trf.Apply", Description = "Forward transform of one or more a point(s) from source CRS to target CRS", IsExceptionSafe = false)]
+        public static object Apply(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
             [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
             [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
             )
+        {
+            return ApplyCore(SourceCrs, TargetCrs, x, y, options, false);
+        }
+
+        [ExcelFunction(Name = "PE.trf.ApplyReversed", Description = "Reversed transform of one or more a point(s) from source CRS to target CRS", IsExceptionSafe = false)]
+        public static object ApplyReversed(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
+            [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            )
+        {
+            return ApplyCore(SourceCrs, TargetCrs, x, y, options, true);
+        }
+
+        private static object ApplyCore(object SourceCrs, object TargetCrs, object[,] x, object[,] y, object options, bool reversed)
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
             CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
@@ -852,7 +892,11 @@ namespace ProjExcel
                             double sx = Convert.ToDouble(xValue);
                             double sy = Convert.ToDouble(yValue);
 
-                            var pnt = transformToUse.Apply(new PPoint(sx, sy));
+                            var pnt = new PPoint(sx, sy);
+                            if (reversed)
+                                pnt = transformToUse.ApplyReversed(pnt);
+                            else
+                                pnt = transformToUse.Apply(pnt);
                             result[row, 0] = pnt.X;
                             result[row, 1] = pnt.Y;
                         }
@@ -867,13 +911,30 @@ namespace ProjExcel
             }
         }
 
-        [ExcelFunction(Name = "PE.trf.TransformEx", Description = "Transform a point from source CRS to target CRS")]
-        public static object TransformEx(
+
+        [ExcelFunction(Name = "PE.trf.ApplyEx", Description = "Forward transform of one or more 2D/3D/4D points from source CRS to target CRS", IsExceptionSafe = false)]
+        public static object ApplyEx(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
             [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
             )
+        {
+            return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, false);
+        }
+
+        [ExcelFunction(Name = "PE.trf.ApplyReversedEx", Description = "Reversed transform of one or more 2D/3D/4D points from source CRS to target CRS", IsExceptionSafe = false)]
+        public static object ApplyReversedEx(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
+            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            )
+        {
+            return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, true);
+        }
+
+        private static object ApplyExCore(object SourceCrs, object TargetCrs, object[,] xyzt, object options, bool reversed)
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
             CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
@@ -938,7 +999,11 @@ namespace ProjExcel
                                         double sx = Convert.ToDouble(xValue);
                                         double sy = Convert.ToDouble(yValue);
 
-                                        var pnt = transformToUse.Apply(new PPoint(sx, sy));
+                                        var pnt = new PPoint(sx, sy);
+                                        if (reversed)
+                                            pnt = transformToUse.ApplyReversed(pnt);
+                                        else
+                                            pnt = transformToUse.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                     }
@@ -964,7 +1029,11 @@ namespace ProjExcel
                                         double sy = Convert.ToDouble(yValue);
                                         double sz = Convert.ToDouble(zValue);
 
-                                        var pnt = transformToUse.Apply(new PPoint(sx, sy, sz));
+                                        var pnt = new PPoint(sx, sy, sz);
+                                        if (reversed)
+                                            pnt = transformToUse.ApplyReversed(pnt);
+                                        else
+                                            pnt = transformToUse.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                         result[row, 2] = pnt.Z;
@@ -994,7 +1063,11 @@ namespace ProjExcel
                                         double sz = Convert.ToDouble(zValue);
                                         double st = Convert.ToDouble(tValue);
 
-                                        var pnt = transformToUse.Apply(new PPoint(sx, sy, sz, st));
+                                        var pnt = new PPoint(sx, sy, sz, st);
+                                        if (reversed)
+                                            pnt = transformToUse.ApplyReversed(pnt);
+                                        else
+                                            pnt = transformToUse.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                         result[row, 2] = pnt.Z;
@@ -1012,7 +1085,6 @@ namespace ProjExcel
                 return $"#ERR: {ex.Message}";
             }
         }
-
 
         // From : D:\GitHub\SharpProj\src\SharpProj\CoordinateTransform.cpp line 49.
         // CoordinateTransform^ CoordinateTransform::Create(CoordinateReferenceSystem^ sourceCrs, CoordinateReferenceSystem^ targetCrs, CoordinateTransformOptions^ options, ProjContext^ ctx)
@@ -1085,6 +1157,7 @@ namespace ProjExcel
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Property is required.");
 
+            name = name.Trim();
             if (int.TryParse(name, out int indexFromText))
                 return indexFromText;
 
@@ -1114,9 +1187,8 @@ namespace ProjExcel
                 case "HasInverse":
                     return transform.HasInverse;
                 case "Identifier":
-                    if (transform.Identifier == null || transform.Identifier.Authority == null || transform.Identifier.Code == null)
-                        return nullValueText;
-                    return transform.Identifier.Authority + ":" + transform.Identifier.Code;
+                    GetTransformIdentifierScopeRemarks(transform, out string ids, out _, out _, nullValueText);
+                    return ids ?? nullValueText;
                 case "Identifiers":
                     if (transform.Identifiers == null || transform.Identifiers.Count == 0)
                         return nullValueText;
