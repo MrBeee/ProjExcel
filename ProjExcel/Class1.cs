@@ -53,6 +53,53 @@ namespace ProjExcel
             }
         }
 
+        /// <summary>
+        /// Verification that SharpProj can access offline resources
+        /// </summary>
+        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess", Description = "Test Proj cdn www-access")]
+        public static string TestProjCdnAccess()
+        {
+            try
+            {
+                // Force modern TLS inside Excel-DNA / .NET Framework
+                System.Net.ServicePointManager.SecurityProtocol =
+                    System.Net.SecurityProtocolType.Tls12 |
+                    System.Net.SecurityProtocolType.Tls13;
+
+                using (var client = new System.Net.WebClient())
+                {
+                    string json = client.DownloadString("https://cdn.proj.org/v1/index.json");
+                    return "SUCCESS: " + json.Substring(0, 80);
+                }
+            }
+            catch (Exception ex)
+            {
+                return "FAILURE: " + ex.ToString();
+            }
+        }
+
+        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess2", Description = "Test2 of Proj cdn www-access")]
+        public static string TestProjCdnAccess2()
+        {
+            try
+            {
+                System.Net.ServicePointManager.SecurityProtocol =
+                    System.Net.SecurityProtocolType.Tls12 |
+                    System.Net.SecurityProtocolType.Tls13;
+
+                using (var client = new System.Net.WebClient())
+                {
+                    string json = client.DownloadString("https://cdn.proj.org/v1/index.json");
+                    return "SUCCESS: " + json.Substring(0, 80);
+                }
+            }
+            catch (Exception ex)
+            {
+                return "FAILURE: " + ex.ToString();
+            }
+        }
+
+
         [ExcelFunction(Name = "PE.tst.TestDefaultValues", Description = "Example with Excel-friendly optional arguments")]
         public static object TestDefaultValues(
             [ExcelArgument(Name = "x", Description = "Required value")] double x,

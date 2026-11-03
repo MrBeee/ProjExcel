@@ -1,4 +1,4 @@
-using ExcelDna.Integration;
+﻿using ExcelDna.Integration;
 using MathNet.Numerics.IntegralTransforms;
 using SharpProj;
 using SharpProj.Proj;
@@ -432,13 +432,13 @@ namespace ProjExcel
             return result;
         }
 
-        [ExcelFunction(Name = "PE.trf.TransformProperty", Description = "Get coordinate transform properties by index or name")]
-        public static object TransformProperty(
+        [ExcelFunction(Name = "PE.trf.Properties", Description = "Show transform properties selected by index or name in a row")]
+        public static object Properties(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "property", Description = "Property index or name, or comma-separated property names/indices")] object property,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()") ] object options = null,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default = \"<null>\"")] object nullValues = null
+            [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -447,10 +447,10 @@ namespace ProjExcel
 
             try
             {
-                bool multipleProperties = property is string names && names.Contains(",");
+                bool multipleProperties = properties is string names && names.Contains(",");
                 int[] propertyIndices = multipleProperties
-                    ? ((string)property).Split(',').Select(name => ParseTransformPropertyIndex(name.Trim())).ToArray()
-                    : new[] { ParseTransformPropertyIndex(property) };
+                    ? ((string)properties).Split(',').Select(name => ParseTransformPropertyIndex(name.Trim())).ToArray()
+                    : new[] { ParseTransformPropertyIndex(properties) };
 
                 if (propertyIndices.Any(index => index < 0 || index >= TransformPropertyNames.Length))
                     return "#ERR: Property index out of range.";
@@ -504,10 +504,10 @@ namespace ProjExcel
         public static object ListTransforms(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options,
-            [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString = null,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default = \"<null>\"")] object nullValues = null,
-            [ExcelArgument(Name = "transpose", Description = "Transpose the list. Default = FALSE")] object transpose = null
+            [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -547,14 +547,79 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.trf.ToString", Description = "Create a string representation of a coordinate transform")]
+        public static object ToString(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (\"Proj\")")] object stringFormat,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            int outputFormat = ParseOutputFormatString(stringFormat);   
+
+            try
+            {
+                using (var pc = CreateContext())
+                {
+                    using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                    {
+                        if (trf == null)
+                            return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                        CoordinateTransform transformToUse = trf;
+
+                        // Handle explicit Multi-Candidate Selection wrappers if applicable
+                        if (optionValues.CandidateIndex > 0)
+                        {
+                            if (trf is ChooseCoordinateTransform list)
+                            {
+                                if (optionValues.CandidateIndex >= list.Count)
+                                    return "#ERR: Candidate Index for transform out of range.";
+
+                                transformToUse = list[optionValues.CandidateIndex];
+                            }
+                            else
+                            {
+                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                            }
+                        }
+
+                        // work with the selected transform and return its string representation in the requested format
+                        switch (outputFormat)
+                        {
+                            case 1: // Proj
+                                return transformToUse.AsProjString();
+                            case 2: // Wkt
+                                return transformToUse.AsWellKnownText();
+                            case 3: // Json
+                                return transformToUse.AsProjJson();
+                            default:
+                                return transformToUse.AsProjString(); // Default to Proj string if no valid format is specified
+                        }
+                    }
+
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+
+
+
         [ExcelFunction(Name = "PE.trf.ListTransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
         public static object ListTransformSteps(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options,
-            [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString = null,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default = \"<null>\"")] object nullValues = null,
-            [ExcelArgument(Name = "transpose", Description= "Transpose the list. Default = FALSE")] object transpose = null
+            [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description= "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -597,6 +662,132 @@ namespace ProjExcel
                 return $"#ERR: {ex.Message}";
             }
         }
+
+        [ExcelFunction(Name = "PE.trf.StepCount", Description = "Number of steps in the transform (pipeline) from source CRS to target CRS")]
+        public static object StepCount(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            try
+            {
+                using (var pc = CreateContext())
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                {
+                    CoordinateTransform selectedTransform = null;
+
+                    if (trf == null)
+                        return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                    if (trf is ChooseCoordinateTransform list)
+                    {
+                        if (optionValues.CandidateIndex >= list.Count)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = list[optionValues.CandidateIndex];
+                    }
+                    else
+                    {
+                        if (optionValues.CandidateIndex > 0)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = trf;
+                    }
+
+                    List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
+                    return steps.Count;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.StepProperties", Description = "Properties of step-N in the transform (pipeline) from source CRS to target CRS")]
+        public static object StepProperties(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "step number", Description = "Step nr to draw information from. Default = 0")] object oStepNumber,
+            [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+            int stepNumber = Optional.Check(oStepNumber, 0);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+            bool multipleProperties = properties is string names && names.Contains(",");
+
+            try
+            {
+                using (var pc = CreateContext())
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                {
+                    CoordinateTransform selectedTransform = null;
+
+                    if (trf == null)
+                        return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                    if (trf is ChooseCoordinateTransform list)
+                    {
+                        if (optionValues.CandidateIndex >= list.Count)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = list[optionValues.CandidateIndex];
+                    }
+                    else
+                    {
+                        if (optionValues.CandidateIndex > 0)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = trf;
+                    }
+
+                    List<CoordinateTransform> transformSteps = GetTransformSteps(selectedTransform);
+                    if (stepNumber < 0 || stepNumber >= transformSteps.Count)
+                        return "#ERR: Step Index for transform out of range.";
+
+                    CoordinateTransform transformStep = transformSteps[stepNumber];
+
+                    int[] propertyIndices = multipleProperties
+                        ? ((string)properties).Split(',').Select(name => ParseTransformPropertyIndex(name.Trim())).ToArray()
+                        : new[] { ParseTransformPropertyIndex(properties) };
+
+                    if (propertyIndices.Any(index => index < 0 || index >= TransformPropertyNames.Length))
+                        return "#ERR: Property index out of range.";
+
+                    int count = transformStep is ChooseCoordinateTransform candidates ? candidates.Count : 1;
+
+                    if (!multipleProperties)
+                        return TransformPropertyNames[propertyIndices[0]] == "Count"
+                            ? (object)count
+                            : GetTransformPropertyValue(transformStep, propertyIndices[0], nullValueText);
+
+                    object[,] result = new object[1, propertyIndices.Length];
+                    for (int i = 0; i < propertyIndices.Length; i++)
+                    {
+                        result[0, i] = TransformPropertyNames[propertyIndices[i]] == "Count"
+                            ? (object)count
+                            : GetTransformPropertyValue(transformStep, propertyIndices[i], nullValueText);
+                    }
+
+                    return result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+
+
 
         private static readonly string[] TransformStepAspectNames = new[]
         {
@@ -813,7 +1004,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
             [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
             )
         {
             return ApplyCore(SourceCrs, TargetCrs, x, y, options, false);
@@ -825,7 +1016,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
             [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
             )
         {
             return ApplyCore(SourceCrs, TargetCrs, x, y, options, true);
@@ -917,7 +1108,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
             )
         {
             return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, false);
@@ -928,7 +1119,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
-            [ExcelArgument(Name = "options", Description = "Optional token string created by PE.trf.Options()")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
             )
         {
             return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, true);
@@ -1086,6 +1277,71 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.trf.Roundtrip", Description = "Get the cumulative error of N transform roundtrips, starting forward", IsExceptionSafe = false)]
+        public static object Roundtrip(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "testPoint", Description = "(x, y, [z]) test point with adjacentcoordinates")] object[,] testPoint,
+            [ExcelArgument(Name = "nrRoundtrips", Description = "Nr of roundtrips to make, Default = 1")] object oRoundTrips,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+
+            // Check specific input data
+            int nTrips = (int)Optional.Check(oRoundTrips, 1.0);
+            // max three adjacent [x, y, z] cells on the same row
+            int cols = testPoint.GetLength(1);
+            if (testPoint.GetLength(0) > 1 || cols > 3) return "ERR: need one test point, containing up to three coordinates";
+
+            try
+            {
+                using (var pc = CreateContext())
+                {
+                    using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                    {
+                        if (trf == null)
+                            return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                        CoordinateTransform transformToUse = trf;
+
+                        // Handle explicit Multi-Candidate Selection wrappers if applicable
+                        if (optionValues.CandidateIndex > 0)
+                        {
+                            if (trf is ChooseCoordinateTransform list)
+                            {
+                                if (optionValues.CandidateIndex >= list.Count)
+                                    return "#ERR: Candidate Index for transform out of range.";
+
+                                transformToUse = list[optionValues.CandidateIndex];
+                            }
+                            else
+                            {
+                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
+                            }
+                        }
+
+                        double x = testPoint.GetLength(1) > 0 ? (double)testPoint[0, 0] : 0.0;
+                        double y = testPoint.GetLength(1) > 1 ? (double)testPoint[0, 1] : 0.0;
+                        double z = testPoint.GetLength(1) > 2 ? (double)testPoint[0, 2] : 0.0;
+                        PPoint pt = new PPoint(x, y, z);
+
+                        double error = transformToUse.RoundTrip(true, nTrips, pt);
+
+                        if (Double.IsInfinity(error))
+                            return "#ERR: Infinite roundtrip error";
+
+                        return error;
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
         // From : D:\GitHub\SharpProj\src\SharpProj\CoordinateTransform.cpp line 49.
         // CoordinateTransform^ CoordinateTransform::Create(CoordinateReferenceSystem^ sourceCrs, CoordinateReferenceSystem^ targetCrs, CoordinateTransformOptions^ options, ProjContext^ ctx)
         // Note that ic ctx = NULL, the context is copied from the source CRS: 
@@ -1142,18 +1398,18 @@ namespace ProjExcel
             return nOut;
         }
 
-        private static int ParseTransformPropertyIndex(object property)
+        private static int ParseTransformPropertyIndex(object properties)
         {
-            if (Optional.IsEmpty(property))
+            if (Optional.IsEmpty(properties))
                 throw new ArgumentException("Property is required.");
 
-            if (property is int n)
+            if (properties is int n)
                 return n;
 
-            if (property is double d)
+            if (properties is double d)
                 return (int)d;
 
-            string name = Convert.ToString(property);
+            string name = Convert.ToString(properties);
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Property is required.");
 
@@ -1167,7 +1423,7 @@ namespace ProjExcel
                     return i;
             }
 
-            throw new ArgumentException("Unknown transform property name.");
+            throw new ArgumentException($"Unknown property. Name: '{name}'.");
         }
 
         private static object GetTransformPropertyValue(CoordinateTransform transform, int propertyIndex, string nullValueText)

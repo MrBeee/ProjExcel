@@ -432,8 +432,8 @@ namespace ProjExcel
         // 
         // So I need to check if these are needed in the future. For now, I will include them in the output string.
 
-        [ExcelFunction(Name = "PE.trf.TransformOptions", Description = "Creates an options token for CoordinateTransformOptions settings")]
-        public static string TransformOptionsSettings(
+        [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for CoordinateTransform options")]
+        public static string Options(
             [ExcelArgument(Name = "Authority", Description = "Authority name (blank = no authority filter)")] object authority = null,
             [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
 
