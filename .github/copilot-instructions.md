@@ -15,6 +15,8 @@
 - Map identifier fields explicitly instead of relying on `ToString()` or `Convert.ToString()` to represent identifiers or collections of identifiers.
 - Expose methods as task-oriented UDFs, not arbitrary method invocation by name. Retain clearly named UDFs for frequently used operations when they improve discoverability.
 - In ProjExcel, prefer transform identifiers formatted as a single AUTHORITY:CODE string in one Excel cell rather than returned as adjacent authority and code cells; explicitly map Identifier.Authority and Identifier.Code instead of using ToString().
+- For a PE.trf.GridProperties UDF, return grids involved in the selected transform as a whole; do not require a transform-step index or expose step details unless needed internally to collect grids. The grid-number-indexed Excel UDF should be named PE.trf.GridProperties and resemble PE.trf.StepProperties, not PE.trf.TransformGridProperties.
+- Diagnose issues with PE.trf.Apply returning a SharpProj network error; do not treat it as a PE.trf.ListTransformOperations issue.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.

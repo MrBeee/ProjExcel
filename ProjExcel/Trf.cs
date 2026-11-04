@@ -25,117 +25,6 @@ namespace ProjExcel
             return ProjService.Default.CreateContext();
         }
 
-
-        // CreateNormalizedCrsshould be moved to the Crs.cs file !!!
-        // SharpProj supports the following options; try to find the relevant one automatically based on the input type.
-        // The following are the relevant Create() methods in SharpProj:
-
-        // public new unsafe static CoordinateReferenceSystem   Create(string[] from, [Optional] ProjContext ctx)
-        // public new unsafe static CoordinateReferenceSystem   Create(string from, [Optional] ProjContext ctx)
-
-        // public new unsafe static CoordinateReferenceSystem   CreateFromWellKnownText(string from, CreateFromWKTOptions options, out string[] warnings, [Optional] ProjContext ctx)
-        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, out string[] warnings, [Optional] ProjContext ctx)
-        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, CreateFromWKTOptions options, [Optional] ProjContext ctx)
-        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, [Optional] ProjContext ctx)
-
-        // public static CoordinateReferenceSystem              CreateFromDatabase(Identifier identifier, [Optional] ProjContext ctx)
-        // public static CoordinateReferenceSystem              CreateFromDatabase(string authority, int code, [Optional] ProjContext ctx)
-        // public unsafe static CoordinateReferenceSystem       CreateFromDatabase(string authority, string code, [Optional] ProjContext ctx)
-
-        // public static CoordinateReferenceSystem              CreateFromEpsg(int epsgCode, [Optional] ProjContext ctx)
-
-        // The next routine allows for wider input than just epsg integer values; It returns a CoordinateReferenceSystem from various input types
-        // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
-        // It has implemented all above Creation methods, apart from the stringlist variant: (string[] from).
-        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oCrs, ProjContext pc)
-        {
-            if (Optional.IsEmpty(oCrs))
-                throw new ArgumentException("CRS specification is empty.");
-
-            if (oCrs is int)
-            {
-                // Cast object to int, to deal with Excel datatypes
-                int nTransform = (int)oCrs;
-                
-                // we have an EPSG number from a single input parameter:
-                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
-
-            }
-            else if (oCrs is double)
-            {
-                // First cast object to double, then to int, to deal with Excel datatypes
-                int nTransform = (int)(double)oCrs;
-
-                // we have an EPSG number from a single input parameter:
-                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
-            }
-            else if (oCrs is string)
-            {
-                // cast to string, to deal with Excel datatypes
-                string sCrs = (string)oCrs;
-
-                bool success = int.TryParse(sCrs, out int nTransform);
-
-                if (success)
-                {
-                    // we have a simple EPSG number
-                    return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
-                }
-                else
-                {
-                    // we have a string of some sorts. The first thing to check is if it starts with an Authority ID
-                    bool hasAuthorityPrefix = Lst.GetAuthorityList()
-                        .Any(authority => sCrs.StartsWith(authority + ":", StringComparison.OrdinalIgnoreCase));
-
-                    if (hasAuthorityPrefix)
-                    {
-                        // we have an authority prefix, so we can try to parse it as an authority code
-                        var parts = sCrs.Split(':');
-                        if (parts.Length == 2 && int.TryParse(parts[1], out nTransform))
-                        {
-                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], nTransform, pc).WithNormalizedAxis(pc);
-                        }
-                        else if (parts.Length == 2)
-                        {
-                            // If the second part is not an integer, we can try to create a CRS from a string code
-                            // First we need to check if the first part is a valid authority string.
-                            // We can do this by checking if it is in the list of authorities we have.
-                            if (Lst.GetAuthorityList().Contains(parts[0], StringComparer.OrdinalIgnoreCase))
-                            {
-                                return CoordinateReferenceSystem.CreateFromDatabase(parts[0], parts[1], pc).WithNormalizedAxis(pc);
-                            }
-                            else
-                            {
-                                throw new ArgumentException($"Invalid authority code format: {sCrs}");
-                            }
-                        }
-
-                        else
-                        {
-                            throw new ArgumentException($"Invalid authority code format: {sCrs}");
-                        }
-                    }
-                    else
-                    {
-                        // We have NO authority prefix, so it must be a different type of string.
-                        // It could be a WKT string or a PROJ string. We can try to detect it by looking for certain keywords.
-                        if ((sCrs.IndexOf("PROJCRS") > -1) || (sCrs.IndexOf("GEOGCRS") > -1) || (sCrs.IndexOf("SPHEROID") > -1))
-                        {
-                            // it must be WKT (well, we hope so)
-                            return CoordinateReferenceSystem.CreateFromWellKnownText(sCrs, pc).WithNormalizedAxis(pc);
-
-                        }
-                        // Otherwise, assume it's a PROJ string
-                        return CoordinateReferenceSystem.Create(sCrs, pc).WithNormalizedAxis(pc);
-                    }
-                }
-            }
-            else
-            {
-                throw new ArgumentException("Unsupported CRS input type.");
-            }
-        }
-
         private static bool HasExplicitCreateOptions(TransformOptions.CoordinateTransformOptionsInput optionValues)
         {
             if (optionValues == null)
@@ -187,44 +76,6 @@ namespace ProjExcel
                 {
                     throw new ArgumentException("Native coordinate transform creation failed.");
                 }
-
-            try
-            {
-                return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-            }
-            catch (Exception ex) when ((ex is ProjException || ex is ArgumentNullException) && coordinateTransformOptions.BestOnly)
-            {
-                // try to recover from a failed "best only" transform by retrying with BestOnly = false
-                // This is a workaround for cases where the "best only" option fails due to missing grids or other issues,
-                // but a valid transform can still be constructed if we allow multiple candidates.
-
-                // For consistencey, it may be better to throw an exception and let the user handle it, but for now we will try to recover automatically.
-                coordinateTransformOptions.BestOnly = false;
-                try
-                {
-                    return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                }
-                catch
-                {
-                    throw;  // rethrow the original exception if the second attempt fails
-                }
-            }
-        }
-
-        private static CoordinateTransform CreateTransformFromSourceAndTargetCrs(
-            CoordinateReferenceSystem src,
-            CoordinateReferenceSystem dst,
-            TransformOptions.CoordinateTransformOptionsInput optionValues,
-            CoordinateTransformOptions coordinateTransformOptions,
-            ProjContext pc)
-        {
-
-            // Early-exit validation check (Saves CPU cycles before pipeline creation)
-            if (src.IsDeprecated && !optionValues.AllowDeprecatedCrs)
-                throw new ArgumentException("Source CRS is deprecated and AllowDeprecatedCrs option is not set.");
-
-            if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
-                throw new ArgumentException("Target CRS is deprecated and AllowDeprecatedCrs option is not set.");
 
             try
             {
@@ -344,8 +195,8 @@ namespace ProjExcel
             if (Optional.IsEmpty(targetCrs))
                 return CreateTransformFromDescription(sourceCrs, optionValues, coordinateTransformOptions, pc);
 
-            using (var src = CreateNormalizedCrs(sourceCrs, pc))
-            using (var dst = CreateNormalizedCrs(targetCrs, pc))
+            using (var src = Crs.CreateNormalizedCrs(sourceCrs, pc))
+            using (var dst = Crs.CreateNormalizedCrs(targetCrs, pc))
             {
                 return CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc);
             }
@@ -663,6 +514,77 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.trf.ListTransformOperations", Description = "List the PROJ operations in a selected coordinate transform")]
+        public static object ListTransformOperations(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+            bool bTranspose = Optional.Check(transpose, false);
+
+            try
+            {
+                using (var pc = CreateContext())
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                {
+                    if (trf == null)
+                        return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                    CoordinateTransform selectedTransform;
+                    if (trf is ChooseCoordinateTransform list)
+                    {
+                        if (optionValues.CandidateIndex >= list.Count)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = list[optionValues.CandidateIndex];
+                    }
+                    else
+                    {
+                        if (optionValues.CandidateIndex > 0)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = trf;
+                    }
+
+                    IReadOnlyList<ProjOperation> operations = selectedTransform.ProjOperations();
+                    object[,] result = new object[8, operations.Count + 1];
+                    result[0, 0] = "Operation Number";
+                    result[1, 0] = "Name";
+                    result[2, 0] = "Type";
+                    result[3, 0] = "IsForwardOnly";
+                    result[4, 0] = "IsInverseOnly";
+                    result[5, 0] = "IsInverse";
+                    result[6, 0] = "Tokens";
+                    result[7, 0] = "AllTokens";
+
+                    for (int i = 0; i < operations.Count; i++)
+                    {
+                        ProjOperation operation = operations[i];
+                        result[0, i + 1] = i;
+                        result[1, i + 1] = SafeTransformStepValue(operation.Name, nullValueText);
+                        result[2, i + 1] = operation.Type.ToString();
+                        result[3, i + 1] = operation.IsForwardOnly;
+                        result[4, i + 1] = operation.IsInverseOnly;
+                        result[5, i + 1] = operation.IsInverse;
+                        result[6, i + 1] = SafeTransformStepValue(string.Join(" ", operation.Tokens), nullValueText);
+                        result[7, i + 1] = SafeTransformStepValue(string.Join(" ", operation.AllTokens), nullValueText);
+                    }
+
+                    return bTranspose ? TransposeObjectArray(result) : result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
         [ExcelFunction(Name = "PE.trf.StepCount", Description = "Number of steps in the transform (pipeline) from source CRS to target CRS")]
         public static object StepCount(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
@@ -783,6 +705,205 @@ namespace ProjExcel
             catch (System.Exception ex)
             {
                 return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.ListTransformGrids", Description = "List grids used by the selected transform. Valid properties: Name, FullName, IsAvailable")]
+        public static object ListTransformGrids(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "properties", Description = "Comma-separated grid properties: \"Name, FullName, IsAvailable\". Empty cell lists all three")] object properties = null,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). CandidateIndex defaults to 0")] object options = null,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+            bool bTranspose = Optional.Check(transpose, false);
+
+            try
+            {
+                string[] selectedProperties = Optional.IsEmpty(properties)
+                    ? GridPropertyNames
+                    : Convert.ToString(properties).Split(',').Select(name => name.Trim()).ToArray();
+
+                if (selectedProperties.Any(name => !GridPropertyNames.Contains(name, StringComparer.OrdinalIgnoreCase)))
+                    return "#ERR: Valid grid properties are Name, FullName, IsAvailable.";
+
+                using (var pc = CreateContext())
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                {
+                    if (trf == null)
+                        return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                    CoordinateTransform selectedTransform;
+                    if (trf is ChooseCoordinateTransform list)
+                    {
+                        if (optionValues.CandidateIndex >= list.Count)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = list[optionValues.CandidateIndex];
+                    }
+                    else
+                    {
+                        if (optionValues.CandidateIndex > 0)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = trf;
+                    }
+
+                    List<GridUsage> grids = GetTransformGrids(selectedTransform);
+
+                    object[,] result = new object[grids.Count + 1, selectedProperties.Length + 1];
+                    result[0, 0] = "Grid Number";
+                    for (int propertyIndex = 0; propertyIndex < selectedProperties.Length; propertyIndex++)
+                        result[0, propertyIndex + 1] = GridPropertyNames.First(name => string.Equals(name, selectedProperties[propertyIndex], StringComparison.OrdinalIgnoreCase));
+
+                    for (int gridIndex = 0; gridIndex < grids.Count; gridIndex++)
+                    {
+                        GridUsage grid = grids[gridIndex];
+                        result[gridIndex + 1, 0] = gridIndex;
+                        for (int propertyIndex = 0; propertyIndex < selectedProperties.Length; propertyIndex++)
+                        {
+                            int index = Array.FindIndex(GridPropertyNames, name => string.Equals(name, selectedProperties[propertyIndex], StringComparison.OrdinalIgnoreCase));
+                            result[gridIndex + 1, propertyIndex + 1] = GetGridPropertyValue(grid, index, nullValueText);
+                        }
+                    }
+
+                    return bTranspose ? TransposeObjectArray(result) : result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.GridProperties", Description = "Properties of grid-N in the selected transform. Valid properties: Name, FullName, IsAvailable")]
+        public static object GridProperties(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
+            [ExcelArgument(Name = "grid number", Description = "Grid number in the selected transform. Default = 0")] object oGridNumber,
+            [ExcelArgument(Name = "properties", Description = "Comma-separated property names/indices: Name (0), FullName (1), IsAvailable (2)")] object properties,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). CandidateIndex defaults to 0")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
+            int gridNumber = Optional.Check(oGridNumber, 0);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+            bool multipleProperties = properties is string names && names.Contains(",");
+
+            try
+            {
+                using (var pc = CreateContext())
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
+                {
+                    if (trf == null)
+                        return "#ERR: No mathematical transformation pipeline could be constructed.";
+
+                    CoordinateTransform selectedTransform;
+                    if (trf is ChooseCoordinateTransform list)
+                    {
+                        if (optionValues.CandidateIndex >= list.Count)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = list[optionValues.CandidateIndex];
+                    }
+                    else
+                    {
+                        if (optionValues.CandidateIndex > 0)
+                            return "#ERR: Candidate Index for transform out of range.";
+
+                        selectedTransform = trf;
+                    }
+
+                    List<GridUsage> grids = GetTransformGrids(selectedTransform);
+                    if (gridNumber < 0 || gridNumber >= grids.Count)
+                        return "#ERR: Grid Index for transform out of range.";
+
+                    int[] propertyIndices = multipleProperties
+                        ? ((string)properties).Split(',').Select(name => ParseGridPropertyIndex(name.Trim())).ToArray()
+                        : new[] { ParseGridPropertyIndex(properties) };
+
+                    if (propertyIndices.Any(index => index < 0 || index >= GridPropertyNames.Length))
+                        return "#ERR: Property index out of range.";
+
+                    GridUsage grid = grids[gridNumber];
+                    if (!multipleProperties)
+                        return GetGridPropertyValue(grid, propertyIndices[0], nullValueText);
+
+                    object[,] result = new object[1, propertyIndices.Length];
+                    for (int i = 0; i < propertyIndices.Length; i++)
+                        result[0, i] = GetGridPropertyValue(grid, propertyIndices[i], nullValueText);
+
+                    return result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        private static readonly string[] GridPropertyNames = { "Name", "FullName", "IsAvailable" };
+
+        private static List<GridUsage> GetTransformGrids(CoordinateTransform selectedTransform)
+        {
+            List<GridUsage> grids = selectedTransform.GridUsages.ToList();
+            if (grids.Count == 0 && selectedTransform is CoordinateTransformList)
+            {
+                foreach (CoordinateTransform step in selectedTransform.Steps())
+                {
+                    foreach (GridUsage grid in step.GridUsages)
+                    {
+                        if (!grids.Any(existing => string.Equals(existing.Name, grid.Name, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(existing.FullName, grid.FullName, StringComparison.OrdinalIgnoreCase)))
+                            grids.Add(grid);
+                    }
+                }
+            }
+
+            return grids;
+        }
+
+        private static int ParseGridPropertyIndex(object property)
+        {
+            if (Optional.IsEmpty(property))
+                throw new ArgumentException("Property is required.");
+
+            if (property is int n)
+                return n;
+
+            if (property is double d)
+                return (int)d;
+
+            string name = Convert.ToString(property)?.Trim();
+            if (int.TryParse(name, out int index))
+                return index;
+
+            int propertyIndex = Array.FindIndex(GridPropertyNames, value => string.Equals(value, name, StringComparison.OrdinalIgnoreCase));
+            if (propertyIndex >= 0)
+                return propertyIndex;
+
+            throw new ArgumentException($"Unknown grid property. Name: '{name}'. Valid properties: Name, FullName, IsAvailable.");
+        }
+
+        private static object GetGridPropertyValue(GridUsage grid, int propertyIndex, string nullValueText)
+        {
+            switch (propertyIndex)
+            {
+                case 0:
+                    return SafeTransformStepValue(grid.Name, nullValueText);
+                case 1:
+                    return SafeTransformStepValue(grid.FullName, nullValueText);
+                case 2:
+                    return grid.IsAvailable;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(propertyIndex));
             }
         }
 

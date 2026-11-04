@@ -61,11 +61,6 @@ namespace ProjExcel
         {
             try
             {
-                // Force modern TLS inside Excel-DNA / .NET Framework
-                System.Net.ServicePointManager.SecurityProtocol =
-                    System.Net.SecurityProtocolType.Tls12; // |
-//                    System.Net.SecurityProtocolType.Tls13;
-
                 using (var client = new System.Net.WebClient())
                 {
                     string json = client.DownloadString("https://cdn.proj.org/v1/index.json");
@@ -83,10 +78,6 @@ namespace ProjExcel
         {
             try
             {
-                System.Net.ServicePointManager.SecurityProtocol =
-                    System.Net.SecurityProtocolType.Tls12 |
-                    System.Net.SecurityProtocolType.Tls13;
-
                 using (var client = new System.Net.WebClient())
                 {
                     string json = client.DownloadString("https://cdn.proj.org/v1/index.json");

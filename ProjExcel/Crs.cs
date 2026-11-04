@@ -24,6 +24,115 @@ namespace ProjExcel
             return ProjService.Default.CreateContext();
         }
 
+        // SharpProj supports the following options; try to find the relevant one automatically based on the input type.
+        // The following are the relevant Create() methods in SharpProj:
+
+        // public new unsafe static CoordinateReferenceSystem   Create(string[] from, [Optional] ProjContext ctx)
+        // public new unsafe static CoordinateReferenceSystem   Create(string from, [Optional] ProjContext ctx)
+
+        // public new unsafe static CoordinateReferenceSystem   CreateFromWellKnownText(string from, CreateFromWKTOptions options, out string[] warnings, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, out string[] warnings, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, CreateFromWKTOptions options, [Optional] ProjContext ctx)
+        // public new static CoordinateReferenceSystem          CreateFromWellKnownText(string from, [Optional] ProjContext ctx)
+
+        // public static CoordinateReferenceSystem              CreateFromDatabase(Identifier identifier, [Optional] ProjContext ctx)
+        // public static CoordinateReferenceSystem              CreateFromDatabase(string authority, int code, [Optional] ProjContext ctx)
+        // public unsafe static CoordinateReferenceSystem       CreateFromDatabase(string authority, string code, [Optional] ProjContext ctx)
+
+        // public static CoordinateReferenceSystem              CreateFromEpsg(int epsgCode, [Optional] ProjContext ctx)
+
+        // The next routine allows for wider input than just epsg integer values; It returns a CoordinateReferenceSystem from various input types
+        // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
+        // It has implemented all above Creation methods, apart from the stringlist variant: (string[] from).
+        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oCrs, ProjContext pc)
+        {
+            if (Optional.IsEmpty(oCrs))
+                throw new ArgumentException("CRS specification is empty.");
+
+            if (oCrs is int)
+            {
+                // Cast object to int, to deal with Excel datatypes
+                int nTransform = (int)oCrs;
+
+                // we have an EPSG number from a single input parameter:
+                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
+
+            }
+            else if (oCrs is double)
+            {
+                // First cast object to double, then to int, to deal with Excel datatypes
+                int nTransform = (int)(double)oCrs;
+
+                // we have an EPSG number from a single input parameter:
+                return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
+            }
+            else if (oCrs is string)
+            {
+                // cast to string, to deal with Excel datatypes
+                string sCrs = (string)oCrs;
+
+                bool success = int.TryParse(sCrs, out int nTransform);
+
+                if (success)
+                {
+                    // we have a simple EPSG number
+                    return CoordinateReferenceSystem.CreateFromEpsg(nTransform, pc).WithNormalizedAxis(pc);
+                }
+                else
+                {
+                    // we have a string of some sorts. The first thing to check is if it starts with an Authority ID
+                    bool hasAuthorityPrefix = Lst.GetAuthorityList()
+                        .Any(authority => sCrs.StartsWith(authority + ":", StringComparison.OrdinalIgnoreCase));
+
+                    if (hasAuthorityPrefix)
+                    {
+                        // we have an authority prefix, so we can try to parse it as an authority code
+                        var parts = sCrs.Split(':');
+                        if (parts.Length == 2 && int.TryParse(parts[1], out nTransform))
+                        {
+                            return CoordinateReferenceSystem.CreateFromDatabase(parts[0], nTransform, pc).WithNormalizedAxis(pc);
+                        }
+                        else if (parts.Length == 2)
+                        {
+                            // If the second part is not an integer, we can try to create a CRS from a string code
+                            // First we need to check if the first part is a valid authority string.
+                            // We can do this by checking if it is in the list of authorities we have.
+                            if (Lst.GetAuthorityList().Contains(parts[0], StringComparer.OrdinalIgnoreCase))
+                            {
+                                return CoordinateReferenceSystem.CreateFromDatabase(parts[0], parts[1], pc).WithNormalizedAxis(pc);
+                            }
+                            else
+                            {
+                                throw new ArgumentException($"Invalid authority code format: {sCrs}");
+                            }
+                        }
+
+                        else
+                        {
+                            throw new ArgumentException($"Invalid authority code format: {sCrs}");
+                        }
+                    }
+                    else
+                    {
+                        // We have NO authority prefix, so it must be a different type of string.
+                        // It could be a WKT string or a PROJ string. We can try to detect it by looking for certain keywords.
+                        if ((sCrs.IndexOf("PROJCRS") > -1) || (sCrs.IndexOf("GEOGCRS") > -1) || (sCrs.IndexOf("SPHEROID") > -1))
+                        {
+                            // it must be WKT (well, we hope so)
+                            return CoordinateReferenceSystem.CreateFromWellKnownText(sCrs, pc).WithNormalizedAxis(pc);
+
+                        }
+                        // Otherwise, assume it's a PROJ string
+                        return CoordinateReferenceSystem.Create(sCrs, pc).WithNormalizedAxis(pc);
+                    }
+                }
+            }
+            else
+            {
+                throw new ArgumentException("Unsupported CRS input type.");
+            }
+        }
+
         internal static CoordinateReferenceSystem CreateCrs(in object[,] oCrs, in ProjContext pjContext, bool ExcelInterop = false)
         {
             int nCrsRows = oCrs.GetLength(0);
