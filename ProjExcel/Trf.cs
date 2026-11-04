@@ -1132,7 +1132,10 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (
+                    
+                    
+                    var pc = CreateContext())
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
@@ -1437,7 +1440,7 @@ namespace ProjExcel
                 case "Context":
                     return SafeCandidateContextValue(transform, nullValueText);
                 case "GridUsages":
-                    return FormatTransformEnumerable(transform.GridUsages, nullValueText);
+                    return transform.GridUsages?.Count ?? 0;
                 case "HasBallParkTransformation":
                     return transform.HasBallParkTransformation;
                 case "HasInverse":

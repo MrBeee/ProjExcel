@@ -63,8 +63,8 @@ namespace ProjExcel
             {
                 // Force modern TLS inside Excel-DNA / .NET Framework
                 System.Net.ServicePointManager.SecurityProtocol =
-                    System.Net.SecurityProtocolType.Tls12 |
-                    System.Net.SecurityProtocolType.Tls13;
+                    System.Net.SecurityProtocolType.Tls12; // |
+//                    System.Net.SecurityProtocolType.Tls13;
 
                 using (var client = new System.Net.WebClient())
                 {
@@ -98,6 +98,49 @@ namespace ProjExcel
                 return "FAILURE: " + ex.ToString();
             }
         }
+
+        [ExcelFunction(Name = "PE.tst.TestProjCdnRaw", Description = "Test raw access to Proj cdn online")]
+        public static string TestProjCdnRaw()
+        {
+            try
+            {
+                var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://cdn.proj.org/");
+                req.Method = "GET";
+                req.AllowAutoRedirect = false;
+
+                using (var resp = (System.Net.HttpWebResponse)req.GetResponse())
+                using (var reader = new System.IO.StreamReader(resp.GetResponseStream()))
+                {
+                    return $"Status: {(int)resp.StatusCode} {resp.StatusCode}";
+                }
+            }
+            catch (Exception ex)
+            {
+                return "FAILURE: " + ex.ToString();
+            }
+        }
+
+        [ExcelFunction(Name = "PE.tst.TestTls12", Description = "Test Tls12 for online grid access")]
+        public static string TestTls12()
+        {
+            try
+            {
+                var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://www.howsmyssl.com/a/check");
+                req.Method = "GET";
+
+                using (var resp = (System.Net.HttpWebResponse)req.GetResponse())
+                using (var reader = new System.IO.StreamReader(resp.GetResponseStream()))
+                {
+                    string json = reader.ReadToEnd();
+                    return json; // .Substring(0, 200);
+                }
+            }
+            catch (Exception ex)
+            {
+                return "FAILURE: " + ex.ToString();
+            }
+        }
+
 
 
         [ExcelFunction(Name = "PE.tst.TestDefaultValues", Description = "Example with Excel-friendly optional arguments")]
