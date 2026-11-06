@@ -202,6 +202,22 @@ namespace ProjExcel
             }
         }
 
+        private static CoordinateTransform SelectCandidateTransform(CoordinateTransform transform, int candidateIndex)
+        {
+            if (transform is ChooseCoordinateTransform candidates)
+            {
+                if (candidateIndex < 0 || candidateIndex >= candidates.Count)
+                    throw new ArgumentException("Candidate Index for transform out of range.");
+
+                return candidates[candidateIndex];
+            }
+
+            if (candidateIndex != 0)
+                throw new ArgumentException("Candidate Index for transform out of range. Only one candidate available.");
+
+            return transform;
+        }
+
         internal static int ParseOutputFormatString(object value)
         {
             string output = Convert.ToString(value);
@@ -315,19 +331,7 @@ namespace ProjExcel
                     int count = trf is ChooseCoordinateTransform candidates ? candidates.Count : 1;
                     CoordinateTransform transformToUse = trf;
                     if (propertyIndices.Any(index => TransformPropertyNames[index] != "Count"))
-                    {
-                        if (trf is ChooseCoordinateTransform list)
-                        {
-                            if (optionValues.CandidateIndex >= list.Count)
-                                return "#ERR: Candidate Index for transform out of range.";
-
-                            transformToUse = list[optionValues.CandidateIndex];
-                        }
-                        else if (optionValues.CandidateIndex > 0)
-                        {
-                            return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                        }
-                    }
+                        transformToUse = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     if (!multipleProperties)
                         return TransformPropertyNames[propertyIndices[0]] == "Count"
@@ -420,23 +424,11 @@ namespace ProjExcel
                         if (trf == null)
                             return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                        CoordinateTransform transformToUse = trf;
-
-                        // Handle explicit Multi-Candidate Selection wrappers if applicable
-                        if (optionValues.CandidateIndex > 0)
-                        {
-                            if (trf is ChooseCoordinateTransform list)
-                            {
-                                if (optionValues.CandidateIndex >= list.Count)
-                                    return "#ERR: Candidate Index for transform out of range.";
-
-                                transformToUse = list[optionValues.CandidateIndex];
-                            }
-                            else
-                            {
-                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                            }
-                        }
+                        CoordinateTransform transformToUse;
+                        if (optionValues.CandidateIndex == 0)
+                            transformToUse = trf;
+                        else
+                            transformToUse = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         // work with the selected transform and return its string representation in the requested format
                         switch (outputFormat)
@@ -484,25 +476,10 @@ namespace ProjExcel
                 using (var pc = CreateContext())
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    CoordinateTransform selectedTransform = null;
-
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
                     return BuildTransformStepsResult(steps, outputFormat, nullValueText, bTranspose);
@@ -536,21 +513,7 @@ namespace ProjExcel
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    CoordinateTransform selectedTransform;
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     IReadOnlyList<ProjOperation> operations = selectedTransform.ProjOperations();
                     object[,] result = new object[8, operations.Count + 1];
@@ -600,25 +563,10 @@ namespace ProjExcel
                 using (var pc = CreateContext())
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    CoordinateTransform selectedTransform = null;
-
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
                     return steps.Count;
@@ -651,25 +599,10 @@ namespace ProjExcel
                 using (var pc = CreateContext())
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    CoordinateTransform selectedTransform = null;
-
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> transformSteps = GetTransformSteps(selectedTransform);
                     if (stepNumber < 0 || stepNumber >= transformSteps.Count)
@@ -738,21 +671,7 @@ namespace ProjExcel
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    CoordinateTransform selectedTransform;
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<GridUsage> grids = GetTransformGrids(selectedTransform);
 
@@ -805,21 +724,7 @@ namespace ProjExcel
                     if (trf == null)
                         return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                    CoordinateTransform selectedTransform;
-                    if (trf is ChooseCoordinateTransform list)
-                    {
-                        if (optionValues.CandidateIndex >= list.Count)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = list[optionValues.CandidateIndex];
-                    }
-                    else
-                    {
-                        if (optionValues.CandidateIndex > 0)
-                            return "#ERR: Candidate Index for transform out of range.";
-
-                        selectedTransform = trf;
-                    }
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<GridUsage> grids = GetTransformGrids(selectedTransform);
                     if (gridNumber < 0 || gridNumber >= grids.Count)
@@ -1157,23 +1062,9 @@ namespace ProjExcel
                         if (trf == null)
                             return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                        CoordinateTransform transformToUse = trf;
-
-                        // Handle explicit Multi-Candidate Selection wrappers if applicable
-                        if (optionValues.CandidateIndex > 0)
-                        {
-                            if (trf is ChooseCoordinateTransform list)
-                            {
-                                if (optionValues.CandidateIndex >= list.Count)
-                                    return "#ERR: Candidate Index for transform out of range.";
-
-                                transformToUse = list[optionValues.CandidateIndex];
-                            }
-                            else
-                            {
-                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                            }
-                        }
+                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
+                            ? trf
+                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         int xRows = x.GetLength(0);
                         int xCols = x.GetLength(1);
@@ -1263,23 +1154,9 @@ namespace ProjExcel
                         if (trf == null)
                             return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                        CoordinateTransform transformToUse = trf;
-
-                        // Handle explicit Multi-Candidate Selection wrappers if applicable
-                        if (optionValues.CandidateIndex > 0)
-                        {
-                            if (trf is ChooseCoordinateTransform list)
-                            {
-                                if (optionValues.CandidateIndex >= list.Count)
-                                    return "#ERR: Candidate Index for transform out of range.";
-
-                                transformToUse = list[optionValues.CandidateIndex];
-                            }
-                            else
-                            {
-                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                            }
-                        }
+                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
+                            ? trf
+                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         int rows = xyzt.GetLength(0);
                         int cols = xyzt.GetLength(1);
@@ -1428,23 +1305,9 @@ namespace ProjExcel
                         if (trf == null)
                             return "#ERR: No mathematical transformation pipeline could be constructed.";
 
-                        CoordinateTransform transformToUse = trf;
-
-                        // Handle explicit Multi-Candidate Selection wrappers if applicable
-                        if (optionValues.CandidateIndex > 0)
-                        {
-                            if (trf is ChooseCoordinateTransform list)
-                            {
-                                if (optionValues.CandidateIndex >= list.Count)
-                                    return "#ERR: Candidate Index for transform out of range.";
-
-                                transformToUse = list[optionValues.CandidateIndex];
-                            }
-                            else
-                            {
-                                return "#ERR: Candidate Index for transform out of range. Only one candidate available.";
-                            }
-                        }
+                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
+                            ? trf
+                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         double x = testPoint.GetLength(1) > 0 ? (double)testPoint[0, 0] : 0.0;
                         double y = testPoint.GetLength(1) > 1 ? (double)testPoint[0, 1] : 0.0;

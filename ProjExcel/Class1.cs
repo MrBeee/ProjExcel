@@ -56,37 +56,41 @@ namespace ProjExcel
         /// <summary>
         /// Verification that SharpProj can access offline resources
         /// </summary>
-        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess", Description = "Test Proj cdn www-access")]
+        /// 
+
+        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess", Description = "Test PROJ CDN access")]
         public static string TestProjCdnAccess()
         {
             try
             {
+                ProjService.ConfigureNetworkSecurityProtocol();
                 using (var client = new System.Net.WebClient())
                 {
-                    string json = client.DownloadString("https://cdn.proj.org/v1/index.json");
-                    return "SUCCESS: " + json.Substring(0, 80);
+                    string response = client.DownloadString("https://cdn.proj.org/");
+                    return "SUCCESS: " + response.Substring(0, Math.Min(77, response.Length));
                 }
             }
             catch (Exception ex)
             {
-                return "FAILURE: " + ex.ToString();
+                return "FAILURE: " + ex;
             }
         }
 
-        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess2", Description = "Test2 of Proj cdn www-access")]
+        [ExcelFunction(Name = "PE.tst.TestProjCdnAccess2", Description = "Test PROJ CDN access via HttpWebRequest")]
         public static string TestProjCdnAccess2()
         {
             try
             {
-                using (var client = new System.Net.WebClient())
+                ProjService.ConfigureNetworkSecurityProtocol();
+                var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://cdn.proj.org/");
+                using (var response = (System.Net.HttpWebResponse)request.GetResponse())
                 {
-                    string json = client.DownloadString("https://cdn.proj.org/v1/index.json");
-                    return "SUCCESS: " + json.Substring(0, 80);
+                    return $"SUCCESS: {(int)response.StatusCode} {response.StatusCode}";
                 }
             }
             catch (Exception ex)
             {
-                return "FAILURE: " + ex.ToString();
+                return "FAILURE: " + ex;
             }
         }
 

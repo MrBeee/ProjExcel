@@ -1,7 +1,6 @@
 # Copilot Instructions
 
 ## TopoLib
-
 - Do not edit any function under `TopoLib`.
 - Treat `TopoLib` as read-only unless explicitly instructed otherwise.
 - Keep changes focused outside `TopoLib`.
@@ -16,7 +15,8 @@
 - Expose methods as task-oriented UDFs, not arbitrary method invocation by name. Retain clearly named UDFs for frequently used operations when they improve discoverability.
 - In ProjExcel, prefer transform identifiers formatted as a single AUTHORITY:CODE string in one Excel cell rather than returned as adjacent authority and code cells; explicitly map Identifier.Authority and Identifier.Code instead of using ToString().
 - For a PE.trf.GridProperties UDF, return grids involved in the selected transform as a whole; do not require a transform-step index or expose step details unless needed internally to collect grids. The grid-number-indexed Excel UDF should be named PE.trf.GridProperties and resemble PE.trf.StepProperties, not PE.trf.TransformGridProperties.
-- Diagnose issues with PE.trf.Apply returning a SharpProj network error; do not treat it as a PE.trf.ListTransformOperations issue.
+- PE.trf.OptionsEx should be a standalone Excel UDF with direct arguments for transform and PROJ context settings; do not require end users to nest PE.trf.Options() inside PE.trf.OptionsEx(). User is open to a single-cell compact token combining transform and PROJ context non-default settings rather than a two-row spill, provided defaults are omitted and CandidateIndex is always shown.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
+- In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.

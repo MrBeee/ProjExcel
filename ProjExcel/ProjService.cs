@@ -42,14 +42,20 @@ namespace ProjExcel
 
         public ProjLogLevel LogLevel { get; set; }
 
+        internal static void ConfigureNetworkSecurityProtocol()
+        {
+            // Preserve the host's setting unless it has only the legacy protocols enabled.
+            // Excel may host .NET with only SSL 3.0 / TLS 1.0 enabled. SharpProj's
+            // network callbacks use .NET; this host rejects SystemDefault during SSL setup.
+            if (ServicePointManager.SecurityProtocol ==
+                (SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls))
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        }
+
         public ProjContext CreateContext()
         {
             ThrowIfDisposed();
-
-            // Excel may host .NET with only SSL 3.0 / TLS 1.0 enabled. SharpProj's
-            // network callbacks use .NET; this host rejects SystemDefault during SSL setup.
-            if (ServicePointManager.SecurityProtocol == (SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls))
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            ConfigureNetworkSecurityProtocol();
 
             var pjContext = new ProjContext
             {
