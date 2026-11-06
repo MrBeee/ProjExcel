@@ -15,7 +15,8 @@
 - Expose methods as task-oriented UDFs, not arbitrary method invocation by name. Retain clearly named UDFs for frequently used operations when they improve discoverability.
 - In ProjExcel, prefer transform identifiers formatted as a single AUTHORITY:CODE string in one Excel cell rather than returned as adjacent authority and code cells; explicitly map Identifier.Authority and Identifier.Code instead of using ToString().
 - For a PE.trf.GridProperties UDF, return grids involved in the selected transform as a whole; do not require a transform-step index or expose step details unless needed internally to collect grids. The grid-number-indexed Excel UDF should be named PE.trf.GridProperties and resemble PE.trf.StepProperties, not PE.trf.TransformGridProperties.
-- PE.trf.OptionsEx should be a standalone Excel UDF with the first argument as a reference to a cell containing PE.trf.Options() output, followed by direct optional PROJ-context settings; do not require end users to nest PE.trf.Options() inside PE.trf.OptionsEx().
+- PE.trf.OptionsEx should be a standalone Excel UDF with direct arguments for transform and PROJ context settings; do not require end users to nest PE.trf.Options() inside PE.trf.OptionsEx().
+- When proposing changes to ApplyCore to use per-call context overrides, explicitly note ProjService.CreateContext currently takes no parameters and show the required overload or equivalent concrete implementation; do not present an overload call as though it already exists.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.

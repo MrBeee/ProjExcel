@@ -54,28 +54,47 @@ namespace ProjExcel
 
         public ProjContext CreateContext()
         {
+            return CreateContext(null);
+        }
+
+        internal ProjContext CreateContext(TransformOptions.CoordinateTransformOptionsInput options)
+        {
             ThrowIfDisposed();
             ConfigureNetworkSecurityProtocol();
 
+            bool enableNetworkConnections = options?.EnableNetworkConnections ?? EnableNetworkConnections;
+            bool enableGridCache = options?.EnableGridCache ?? EnableGridCache;
+            int gridCacheSizeMb = options?.GridCacheSizeMb ?? GridCacheSizeMb;
+            int gridCacheTtlSeconds = options?.GridCacheTtlSeconds ?? GridCacheTtlSeconds;
+            string endpointUrl = options?.EndpointUrl ?? EndpointUrl;
+            string gridCachePath = options?.GridCachePath ?? GridCachePath;
+            ProjLogLevel logLevel = options?.LogLevel ?? LogLevel;
+
+            if (gridCacheSizeMb <= 0)
+                throw new ArgumentOutOfRangeException(nameof(options), "GridCacheSizeMb must be a positive integer.");
+
+            if (gridCacheTtlSeconds < 0)
+                throw new ArgumentOutOfRangeException(nameof(options), "GridCacheTtlSeconds must be a non-negative integer.");
+
             var pjContext = new ProjContext
             {
-                EnableNetworkConnections = EnableNetworkConnections,
-                LogLevel = LogLevel
+                EnableNetworkConnections = enableNetworkConnections,
+                LogLevel = logLevel
             };
 
-            if (!string.IsNullOrWhiteSpace(EndpointUrl))
-                pjContext.EndpointUrl = EndpointUrl;
+            if (!string.IsNullOrWhiteSpace(endpointUrl))
+                pjContext.EndpointUrl = endpointUrl;
 
-            if (!string.IsNullOrWhiteSpace(GridCachePath))
+            if (!string.IsNullOrWhiteSpace(gridCachePath))
             {
-                string cacheDirectory = Path.GetDirectoryName(GridCachePath);
+                string cacheDirectory = Path.GetDirectoryName(gridCachePath);
                 if (!string.IsNullOrWhiteSpace(cacheDirectory))
                     Directory.CreateDirectory(cacheDirectory);
 
-                pjContext.SetGridCache(EnableGridCache, GridCachePath, GridCacheSizeMb, GridCacheTtlSeconds);
+                pjContext.SetGridCache(enableGridCache, gridCachePath, gridCacheSizeMb, gridCacheTtlSeconds);
             }
 
-            if (LogLevel != ProjLogLevel.None)
+            if (logLevel != ProjLogLevel.None)
                 pjContext.Log += OnProjLog;
 
             return pjContext;
