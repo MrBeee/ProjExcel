@@ -1,6 +1,7 @@
 using ExcelDna.Integration;
 using MathNet.Numerics.IntegralTransforms;
 using SharpProj;
+using SharpProj.Proj;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -64,6 +65,14 @@ namespace ProjExcel
             public bool AllowDeprecatedCrs { get; set; }
             public int CandidateIndex { get; set; }
             public string ErrorMessage { get; set; }
+
+            public bool? EnableNetworkConnections { get; set; }
+            public bool? EnableGridCache { get; set; }
+            public int? GridCacheSizeMb { get; set; }
+            public int? GridCacheTtlSeconds { get; set; }
+            public string EndpointUrl { get; set; }
+            public string GridCachePath { get; set; }
+            public ProjLogLevel? LogLevel { get; set; }
 
             public CoordinateTransformOptionsInput()
             {
@@ -147,6 +156,24 @@ namespace ProjExcel
                     {
                         int candidateIndex = ParseIntOrDefault(value, 0);
                         values.CandidateIndex = Math.Max(candidateIndex, 0);
+                    }
+                    else if (string.Equals(key, "EnableNetworkConnections", StringComparison.OrdinalIgnoreCase))
+                        values.EnableNetworkConnections = ParseBooleanOrDefault(value, ProjService.Default.EnableNetworkConnections);
+                    else if (string.Equals(key, "EnableGridCache", StringComparison.OrdinalIgnoreCase))
+                        values.EnableGridCache = ParseBooleanOrDefault(value, ProjService.Default.EnableGridCache);
+                    else if (string.Equals(key, "GridCacheSizeMb", StringComparison.OrdinalIgnoreCase))
+                        values.GridCacheSizeMb = ParseIntOrDefault(value, ProjService.Default.GridCacheSizeMb);
+                    else if (string.Equals(key, "GridCacheTtlSeconds", StringComparison.OrdinalIgnoreCase))
+                        values.GridCacheTtlSeconds = ParseIntOrDefault(value, ProjService.Default.GridCacheTtlSeconds);
+                    else if (string.Equals(key, "EndpointUrl", StringComparison.OrdinalIgnoreCase))
+                        values.EndpointUrl = string.IsNullOrWhiteSpace(value) ? null : value;
+                    else if (string.Equals(key, "GridCachePath", StringComparison.OrdinalIgnoreCase))
+                        values.GridCachePath = string.IsNullOrWhiteSpace(value) ? null : value;
+                    else if (string.Equals(key, "LogLevel", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ProjLogLevel logLevel;
+                        if (Enum.TryParse(value, true, out logLevel) && Enum.IsDefined(typeof(ProjLogLevel), logLevel))
+                            values.LogLevel = logLevel;
                     }
                 }
                 return values;
@@ -460,29 +487,153 @@ namespace ProjExcel
             [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null
             )
         {
+            var parts = new List<string>();
+
             string authorityValue = Convert.ToString(authority);
-            authorityValue = string.IsNullOrWhiteSpace(authorityValue) ? string.Empty : authorityValue;
+            if (!string.IsNullOrWhiteSpace(authorityValue))
+                parts.Add("Authority=" + authorityValue);
 
             double? accuracyValue = ParseNullableDoubleOrDefault(accuracy, null);
+            if (accuracyValue.HasValue)
+                parts.Add("Accuracy=" + Convert.ToString(accuracyValue.Value));
 
             string areaValue = BuildAreaToken(westLongitude, southLatitude, eastLongitude, northLatitude);
+            if (!string.IsNullOrEmpty(areaValue))
+                parts.Add("Area=" + areaValue);
 
-            return string.Join("; ",
-                "Authority=" + authorityValue,
-                "Accuracy=" + (accuracyValue.HasValue ? Convert.ToString(accuracyValue.Value) : string.Empty),
-                "Area=" + areaValue,
-                "BestOnly=" + ParseBooleanOrDefault(bestOnly, false),
-                "ForceOver=" + ParseBooleanOrDefault(forceOver, false),
-                "IntermediateCrsUsage=" + ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage),
-                "NoBallparkConversions=" + ParseBooleanOrDefault(noBallparkConversions, false),
-                "NoDiscardIfMissing=" + ParseBooleanOrDefault(noDiscardIfMissing, false),
-                "StrictContains=" + ParseBooleanOrDefault(strictContains, false),
-                "UsePrimaryGridNames=" + ParseBooleanOrDefault(usePrimaryGridNames, false),
-                "UseSuperseded=" + ParseBooleanOrDefault(useSuperseded, false),
+            if (ParseBooleanOrDefault(bestOnly, false))
+                parts.Add("BestOnly=True");
 
-                "|| AllowDeprecatedCrs=" + ParseBooleanOrDefault(allowDeprecatedCrs, false),
-                "CandidateIndex=" + ParseIntOrDefault(candidateIndex, 0)
-            );
+            if (ParseBooleanOrDefault(forceOver, false))
+                parts.Add("ForceOver=True");
+
+            string usage = ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage);
+            if (usage != "Auto")
+                parts.Add("IntermediateCrsUsage=" + usage);
+
+            if (ParseBooleanOrDefault(noBallparkConversions, false))
+                parts.Add("NoBallparkConversions=True");
+
+            if (ParseBooleanOrDefault(noDiscardIfMissing, false))
+                parts.Add("NoDiscardIfMissing=True");
+
+            if (ParseBooleanOrDefault(strictContains, false))
+                parts.Add("StrictContains=True");
+
+            if (ParseBooleanOrDefault(usePrimaryGridNames, false))
+                parts.Add("UsePrimaryGridNames=True");
+
+            if (ParseBooleanOrDefault(useSuperseded, false))
+                parts.Add("UseSuperseded=True");
+
+            if (ParseBooleanOrDefault(allowDeprecatedCrs, false))
+                parts.Add("AllowDeprecatedCrs=True");
+
+            parts.Add("CandidateIndex=" + Math.Max(ParseIntOrDefault(candidateIndex, 0), 0));
+            return string.Join("; ", parts);
+        }
+
+        [ExcelFunction(Name = "PE.trf.OptionsEx", Description = "Adds PROJ context settings to a transform options token")]
+        public static string OptionsEx(
+            [ExcelArgument(Name = "transformOptions", Description = "Cell containing output from PE.trf.Options()  (blank = defaults)")] object transformOptions = null,
+            [ExcelArgument(Name = "EnableNetworkConnections", Description = "Allow online grid access (default: TRUE)")] object enableNetworkConnections = null,
+            [ExcelArgument(Name = "EnableGridCache", Description = "Cache downloaded grids (default: TRUE)")] object enableGridCache = null,
+            [ExcelArgument(Name = "GridCacheSizeMb", Description = "Grid cache size in MB (default: 300)")] object gridCacheSizeMb = null,
+            [ExcelArgument(Name = "GridCacheTtlSeconds", Description = "Grid cache lifetime in seconds (default: 86400)")] object gridCacheTtlSeconds = null,
+            [ExcelArgument(Name = "EndpointUrl", Description = "PROJ network endpoint (default: https://cdn.proj.org)")] object endpointUrl = null,
+            [ExcelArgument(Name = "GridCachePath", Description = "Grid cache file (default: %LOCALAPPDATA%\\ProjExcel\\proj\\cache.db)")] object gridCachePath = null,
+            [ExcelArgument(Name = "LogLevel", Description = "PROJ log level: None, Error (default), Debug, and Trace)")] object logLevel = null
+            )
+        {
+            object raw = transformOptions;
+            if (raw is object[,] matrix)
+            {
+                if (matrix.Length != 1)
+                    return "#ERR: transformOptions must be a single cell.";
+
+                raw = matrix[0, 0];
+            }
+
+            string token;
+            if (raw == null || raw == DBNull.Value || raw == Type.Missing || raw is ExcelMissing || raw is ExcelEmpty)
+                token = "CandidateIndex=0";
+            else if (raw is string text)
+                token = string.IsNullOrWhiteSpace(text) ? "CandidateIndex=0" : text;
+            else
+                return "#ERR: transformOptions must contain a token from PE.trf.Options().";
+
+            var parts = new List<string> { token };
+            ProjService defaults = ProjService.Default;
+
+            if (!Optional.IsEmpty(enableNetworkConnections))
+            {
+                bool enabled = ParseBooleanOrDefault(enableNetworkConnections, defaults.EnableNetworkConnections);
+                if (enabled != defaults.EnableNetworkConnections)
+                    parts.Add("EnableNetworkConnections=" + enabled);
+            }
+
+            if (!Optional.IsEmpty(enableGridCache))
+            {
+                bool enabled = ParseBooleanOrDefault(enableGridCache, defaults.EnableGridCache);
+                if (enabled != defaults.EnableGridCache)
+                    parts.Add("EnableGridCache=" + enabled);
+            }
+
+            if (!Optional.IsEmpty(gridCacheSizeMb))
+            {
+                int size;
+                if (!int.TryParse(Convert.ToString(gridCacheSizeMb), out size) || size <= 0)
+                    return "#ERR: GridCacheSizeMb must be a positive integer.";
+
+                if (size != defaults.GridCacheSizeMb)
+                    parts.Add("GridCacheSizeMb=" + size);
+            }
+
+            if (!Optional.IsEmpty(gridCacheTtlSeconds))
+            {
+                int ttl;
+                if (!int.TryParse(Convert.ToString(gridCacheTtlSeconds), out ttl) || ttl < 0)
+                    return "#ERR: GridCacheTtlSeconds must be a non-negative integer.";
+
+                if (ttl != defaults.GridCacheTtlSeconds)
+                    parts.Add("GridCacheTtlSeconds=" + ttl);
+            }
+
+            if (!Optional.IsEmpty(endpointUrl))
+            {
+                string endpoint = Convert.ToString(endpointUrl).Trim();
+                Uri uri;
+                if (endpoint.IndexOfAny(new[] { ';', '|' }) >= 0 ||
+                    !Uri.TryCreate(endpoint, UriKind.Absolute, out uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                    return "#ERR: EndpointUrl must be an HTTP(S) URL without semicolons or pipes.";
+
+                if (!string.Equals(endpoint, defaults.EndpointUrl, StringComparison.OrdinalIgnoreCase))
+                    parts.Add("EndpointUrl=" + endpoint);
+            }
+
+            if (!Optional.IsEmpty(gridCachePath))
+            {
+                string path = Convert.ToString(gridCachePath).Trim();
+                if (path.IndexOfAny(new[] { ';', '|' }) >= 0)
+                    return "#ERR: GridCachePath cannot contain semicolons or pipes.";
+
+                if (!string.Equals(path, defaults.GridCachePath, StringComparison.OrdinalIgnoreCase))
+                    parts.Add("GridCachePath=" + path);
+            }
+
+            if (!Optional.IsEmpty(logLevel))
+            {
+                ProjLogLevel level;
+                if (!Enum.TryParse(Convert.ToString(logLevel), true, out level) ||
+                    !Enum.IsDefined(typeof(ProjLogLevel), level))
+                    return "#ERR: LogLevel must be a valid PROJ log level.";
+
+                if (level != defaults.LogLevel)
+                    parts.Add("LogLevel=" + level);
+            }
+
+            return string.Join("; ", parts);
         }
     }
 }
