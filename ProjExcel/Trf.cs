@@ -20,11 +20,6 @@ namespace ProjExcel
 {
     public static class TransformFunctions
     {
-        internal static ProjContext CreateContext()
-        {
-            return ProjService.Default.CreateContext();
-        }
-
         private static bool HasExplicitCreateOptions(TransformOptions.CoordinateTransformOptionsInput optionValues)
         {
             if (optionValues == null)
@@ -304,7 +299,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
@@ -322,7 +317,9 @@ namespace ProjExcel
                 if (propertyIndices.Any(index => index < 0 || index >= TransformPropertyNames.Length))
                     return "#ERR: Property index out of range.";
 
-                using (var pc = CreateContext())
+////                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -360,7 +357,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
@@ -373,7 +370,8 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -407,7 +405,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (\"Proj\")")] object stringFormat,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -417,7 +415,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
@@ -460,7 +458,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "outputString", Description = "None, Proj, Wkt or Json (\"none\")")] object outputString,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
             [ExcelArgument(Name = "transpose", Description= "Option to transpose the list. Default = FALSE")] object transpose = null
             )
@@ -473,7 +471,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -495,7 +493,7 @@ namespace ProjExcel
         public static object ListTransformOperations(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
@@ -507,7 +505,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -552,7 +550,7 @@ namespace ProjExcel
         public static object StepCount(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -560,7 +558,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -584,7 +582,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "step number", Description = "Step nr to draw information from. Default = 0")] object oStepNumber,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
@@ -596,7 +594,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -646,7 +644,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
             [ExcelArgument(Name = "properties", Description = "Comma-separated grid properties: \"Name, FullName, IsAvailable\". Empty cell lists all three")] object properties = null,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). CandidateIndex defaults to 0")] object options = null,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). CandidateIndex defaults to 0")] object options = null,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
@@ -665,7 +663,7 @@ namespace ProjExcel
                 if (selectedProperties.Any(name => !GridPropertyNames.Contains(name, StringComparer.OrdinalIgnoreCase)))
                     return "#ERR: Valid grid properties are Name, FullName, IsAvailable.";
 
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -706,7 +704,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or null/empty)")] object TargetCrs,
             [ExcelArgument(Name = "grid number", Description = "Grid number in the selected transform. Default = 0")] object oGridNumber,
             [ExcelArgument(Name = "properties", Description = "Comma-separated property names/indices: Name (0), FullName (1), IsAvailable (2)")] object properties,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). CandidateIndex defaults to 0")] object options,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). CandidateIndex defaults to 0")] object options,
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
@@ -718,7 +716,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
                     if (trf == null)
@@ -1030,7 +1028,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
             [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             return ApplyCore(SourceCrs, TargetCrs, x, y, options, false);
@@ -1042,7 +1040,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical single-column of X-values (longitude or easting).")] object[,] x,
             [ExcelArgument(Description = "Vertical single-column of Y-values (latitude or northing).")] object[,] y,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             return ApplyCore(SourceCrs, TargetCrs, x, y, options, true);
@@ -1055,7 +1053,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
@@ -1120,7 +1118,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, false);
@@ -1131,7 +1129,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Description = "Vertical table with adjacent columns for X, Y, [Z], [T] input values")] object[,] xyzt,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             return ApplyExCore(SourceCrs, TargetCrs, xyzt, options, true);
@@ -1147,7 +1145,7 @@ namespace ProjExcel
                 using (
                     
                     
-                    var pc = CreateContext())
+                    var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
@@ -1284,7 +1282,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (or nul/empty)")] object TargetCrs,
             [ExcelArgument(Name = "testPoint", Description = "(x, y, [z]) test point with adjacentcoordinates")] object[,] testPoint,
             [ExcelArgument(Name = "nrRoundtrips", Description = "Nr of roundtrips to make, Default = 1")] object oRoundTrips,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string created by PE.trf.Options(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -1298,7 +1296,7 @@ namespace ProjExcel
 
             try
             {
-                using (var pc = CreateContext())
+                using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {

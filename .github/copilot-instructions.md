@@ -7,6 +7,7 @@
 
 ## Project Guidelines
 - User prefers no custom candidate ranking; expose SharpProj ChooseCoordinateTransform entries directly and let end user choose candidate index.
+- For PE.trf.Options(), CandidateIndex must be the first Excel input argument and first output token; AllowDeprecatedCrs must be the second input argument and second output token when non-default; keep the sequence of all remaining arguments and output fields unchanged. This supersedes the earlier CandidateIndex-last preference.
 - Do not edit PE.trf.TransformList unless explicitly requested; user considers it correct and wants changes elsewhere.
 - Keep the Excel-facing API deliberate: use explicit, stable property names for scalar CRS and transform values rather than exposing arbitrary .NET members through reflection.
 - For ProjExcel Excel-facing UDFs, use explicit stable property names for scalars; expose identifiers as Excel-friendly structured authority/code data mapped explicitly; use task-oriented UDFs for methods and retain discoverable commonly used UDFs instead of generic reflection or ToString-based object serialization.
@@ -20,4 +21,4 @@
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
-- In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.
+- In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.va

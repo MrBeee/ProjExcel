@@ -461,6 +461,8 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.trf.Options", Description = "Creates an options token for CoordinateTransform options")]
         public static string Options(
+            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null,
+            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null,
             [ExcelArgument(Name = "Authority", Description = "Authority name (blank = no authority filter)")] object authority = null,
             [ExcelArgument(Name = "Accuracy", Description = "Desired accuracy (blank = none)")] object accuracy = null,
 
@@ -481,13 +483,16 @@ namespace ProjExcel
             [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
 
             [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
-            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
-
-            [ExcelArgument(Name = "AllowDeprecatedCrs", Description = "Allow deprecated CRSs (FALSE)")] object allowDeprecatedCrs = null,
-            [ExcelArgument(Name = "CandidateIndex", Description = "Transform candidate index (0)")] object candidateIndex = null
+            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null
             )
         {
-            var parts = new List<string>();
+            var parts = new List<string>
+            {
+                "CandidateIndex=" + Math.Max(ParseIntOrDefault(candidateIndex, 0), 0)
+            };
+
+            if (ParseBooleanOrDefault(allowDeprecatedCrs, false))
+                parts.Add("AllowDeprecatedCrs=True");
 
             string authorityValue = Convert.ToString(authority);
             if (!string.IsNullOrWhiteSpace(authorityValue))
@@ -526,10 +531,6 @@ namespace ProjExcel
             if (ParseBooleanOrDefault(useSuperseded, false))
                 parts.Add("UseSuperseded=True");
 
-            if (ParseBooleanOrDefault(allowDeprecatedCrs, false))
-                parts.Add("AllowDeprecatedCrs=True");
-
-            parts.Add("CandidateIndex=" + Math.Max(ParseIntOrDefault(candidateIndex, 0), 0));
             return string.Join("; ", parts);
         }
 
