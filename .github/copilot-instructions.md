@@ -18,7 +18,9 @@
 - For a PE.trf.GridProperties UDF, return grids involved in the selected transform as a whole; do not require a transform-step index or expose step details unless needed internally to collect grids. The grid-number-indexed Excel UDF should be named PE.trf.GridProperties and resemble PE.trf.StepProperties, not PE.trf.TransformGridProperties.
 - PE.trf.OptionsEx should be a standalone Excel UDF with direct arguments for transform and PROJ context settings; do not require end users to nest PE.trf.Options() inside PE.trf.OptionsEx().
 - When proposing changes to ApplyCore to use per-call context overrides, explicitly note ProjService.CreateContext currently takes no parameters and show the required overload or equivalent concrete implementation; do not present an overload call as though it already exists.
+- Centralize null-transform validation in SelectCandidateTransform with ArgumentException("No mathematical transformation pipeline could be constructed.") for transform UDFs that select a candidate, instead of duplicating null checks at each call site, while respecting list-all and chooser semantics.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
-- In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.va
+- In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.
+- In Trf.cs, remove the no-explicit-options path using `CoordinateTransform.Create(src,dst,pc)` and delete `HasExplicitCreateOptions`; always create source/target CRS transforms with `CoordinateTransform.Create(src,dst,coordinateTransformOptions,pc)`. Rename `CreateTransformWithOptionalOptions` to `CreateTransformWithOptions`, retaining options-based fallback behavior unless separately requested.

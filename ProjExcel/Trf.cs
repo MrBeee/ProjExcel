@@ -20,33 +20,7 @@ namespace ProjExcel
 {
     public static class TransformFunctions
     {
-        private static bool HasExplicitCreateOptions(TransformOptions.CoordinateTransformOptionsInput optionValues)
-        {
-            if (optionValues == null)
-                return false;
-
-            if (!string.IsNullOrWhiteSpace(optionValues.Authority))
-                return true;
-
-            if (optionValues.Accuracy.HasValue)
-                return true;
-
-            if (optionValues.Area != null)
-                return true;
-
-            if (optionValues.NoBallparkConversions ||
-                optionValues.NoDiscardIfMissing ||
-                optionValues.UsePrimaryGridNames ||
-                optionValues.UseSuperseded ||
-                optionValues.StrictContains ||
-                optionValues.BestOnly ||
-                optionValues.ForceOver)
-                return true;
-
-            return optionValues.IntermediateCrsUsage != IntermediateCrsUsage.Auto;
-        }
-
-        private static CoordinateTransform CreateTransformWithOptionalOptions(
+        private static CoordinateTransform CreateTransformWithOptions(
             CoordinateReferenceSystem src,
             CoordinateReferenceSystem dst,
             TransformOptions.CoordinateTransformOptionsInput optionValues,
@@ -60,17 +34,6 @@ namespace ProjExcel
 
             if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                 throw new ArgumentException("Target CRS is deprecated and AllowDeprecatedCrs option is not set.");
-
-            // If no explicit options are provided, we can use the simpler Create() method without options for optimal Proj compatibility.
-            if (!HasExplicitCreateOptions(optionValues))
-                try
-                {
-                    return CoordinateTransform.Create(src, dst, pc);
-                }
-                catch
-                {
-                    throw new ArgumentException("Native coordinate transform creation failed.");
-                }
 
             try
             {
@@ -193,12 +156,15 @@ namespace ProjExcel
             using (var src = Crs.CreateNormalizedCrs(sourceCrs, pc))
             using (var dst = Crs.CreateNormalizedCrs(targetCrs, pc))
             {
-                return CreateTransformWithOptionalOptions(src, dst, optionValues, coordinateTransformOptions, pc);
+                return CreateTransformWithOptions(src, dst, optionValues, coordinateTransformOptions, pc);
             }
         }
 
         private static CoordinateTransform SelectCandidateTransform(CoordinateTransform transform, int candidateIndex)
         {
+            if (transform == null)
+                throw new ArgumentException("No mathematical transformation pipeline could be constructed.");
+
             if (transform is ChooseCoordinateTransform candidates)
             {
                 if (candidateIndex < 0 || candidateIndex >= candidates.Count)
@@ -294,6 +260,41 @@ namespace ProjExcel
             return result;
         }
 
+        [ExcelFunction(Name = "PE.trf.ListContextSettings", Description = "List default or token-overridden PROJ context settings")]
+        public static object ListContextSettings(
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.OptionsEx() (blank = defaults)")] object options = null)
+        {
+            object raw = options;
+            if (raw is object[,] matrix)
+            {
+                if (matrix.Length != 1)
+                    return "#ERR: transformOptions must be a single cell.";
+
+                raw = matrix[0, 0];
+            }
+
+            if (raw is ExcelError)
+                return "#ERR: Invalid transformOptions value.";
+
+            if (raw is string token && token.StartsWith("#ERR:", StringComparison.OrdinalIgnoreCase))
+                return token;
+
+            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(raw);
+            ProjService defaults = ProjService.Default;
+
+            return new object[,]
+            {
+                { "Setting", "Value" },
+                { "EnableNetworkConnections", values.EnableNetworkConnections ?? defaults.EnableNetworkConnections },
+                { "EnableGridCache", values.EnableGridCache ?? defaults.EnableGridCache },
+                { "GridCacheSizeMb", values.GridCacheSizeMb ?? defaults.GridCacheSizeMb },
+                { "GridCacheTtlSeconds", values.GridCacheTtlSeconds ?? defaults.GridCacheTtlSeconds },
+                { "EndpointUrl", values.EndpointUrl ?? defaults.EndpointUrl },
+                { "GridCachePath", values.GridCachePath ?? defaults.GridCachePath },
+                { "LogLevel", (values.LogLevel ?? defaults.LogLevel).ToString() }
+            };
+        }
+
         [ExcelFunction(Name = "PE.trf.Properties", Description = "Show transform properties selected by index or name in a row")]
         public static object Properties(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform)")] object SourceCrs,
@@ -322,25 +323,20 @@ namespace ProjExcel
 
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
                     int count = trf is ChooseCoordinateTransform candidates ? candidates.Count : 1;
-                    CoordinateTransform transformToUse = trf;
-                    if (propertyIndices.Any(index => TransformPropertyNames[index] != "Count"))
-                        transformToUse = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     if (!multipleProperties)
                         return TransformPropertyNames[propertyIndices[0]] == "Count"
                             ? (object)count
-                            : GetTransformPropertyValue(transformToUse, propertyIndices[0], nullValueText);
+                            : GetTransformPropertyValue(selectedTransform, propertyIndices[0], nullValueText);
 
                     object[,] result = new object[1, propertyIndices.Length];
                     for (int i = 0; i < propertyIndices.Length; i++)
                     {
                         result[0, i] = TransformPropertyNames[propertyIndices[i]] == "Count"
                             ? (object)count
-                            : GetTransformPropertyValue(transformToUse, propertyIndices[i], nullValueText);
+                            : GetTransformPropertyValue(selectedTransform, propertyIndices[i], nullValueText);
                     }
 
                     return result;
@@ -419,26 +415,19 @@ namespace ProjExcel
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
-                        if (trf == null)
-                            return "#ERR: No mathematical transformation pipeline could be constructed.";
-
-                        CoordinateTransform transformToUse;
-                        if (optionValues.CandidateIndex == 0)
-                            transformToUse = trf;
-                        else
-                            transformToUse = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         // work with the selected transform and return its string representation in the requested format
                         switch (outputFormat)
                         {
                             case 1: // Proj
-                                return transformToUse.AsProjString();
+                                return selectedTransform.AsProjString();
                             case 2: // Wkt
-                                return transformToUse.AsWellKnownText();
+                                return selectedTransform.AsWellKnownText();
                             case 3: // Json
-                                return transformToUse.AsProjJson();
+                                return selectedTransform.AsProjJson();
                             default:
-                                return transformToUse.AsProjString(); // Default to Proj string if no valid format is specified
+                                return selectedTransform.AsProjString(); // Default to Proj string if no valid format is specified
                         }
                     }
 
@@ -474,9 +463,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
@@ -508,9 +494,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     IReadOnlyList<ProjOperation> operations = selectedTransform.ProjOperations();
@@ -561,9 +544,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
@@ -597,9 +577,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<CoordinateTransform> transformSteps = GetTransformSteps(selectedTransform);
@@ -666,9 +643,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<GridUsage> grids = GetTransformGrids(selectedTransform);
@@ -719,9 +693,6 @@ namespace ProjExcel
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                 {
-                    if (trf == null)
-                        return "#ERR: No mathematical transformation pipeline could be constructed.";
-
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                     List<GridUsage> grids = GetTransformGrids(selectedTransform);
@@ -1057,12 +1028,7 @@ namespace ProjExcel
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
-                        if (trf == null)
-                            return "#ERR: No mathematical transformation pipeline could be constructed.";
-
-                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
-                            ? trf
-                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         int xRows = x.GetLength(0);
                         int xCols = x.GetLength(1);
@@ -1095,9 +1061,9 @@ namespace ProjExcel
 
                             var pnt = new PPoint(sx, sy);
                             if (reversed)
-                                pnt = transformToUse.ApplyReversed(pnt);
+                                pnt = selectedTransform.ApplyReversed(pnt);
                             else
-                                pnt = transformToUse.Apply(pnt);
+                                pnt = selectedTransform.Apply(pnt);
                             result[row, 0] = pnt.X;
                             result[row, 1] = pnt.Y;
                         }
@@ -1149,12 +1115,7 @@ namespace ProjExcel
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
-                        if (trf == null)
-                            return "#ERR: No mathematical transformation pipeline could be constructed.";
-
-                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
-                            ? trf
-                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         int rows = xyzt.GetLength(0);
                         int cols = xyzt.GetLength(1);
@@ -1191,9 +1152,9 @@ namespace ProjExcel
 
                                         var pnt = new PPoint(sx, sy);
                                         if (reversed)
-                                            pnt = transformToUse.ApplyReversed(pnt);
+                                            pnt = selectedTransform.ApplyReversed(pnt);
                                         else
-                                            pnt = transformToUse.Apply(pnt);
+                                            pnt = selectedTransform.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                     }
@@ -1221,9 +1182,9 @@ namespace ProjExcel
 
                                         var pnt = new PPoint(sx, sy, sz);
                                         if (reversed)
-                                            pnt = transformToUse.ApplyReversed(pnt);
+                                            pnt = selectedTransform.ApplyReversed(pnt);
                                         else
-                                            pnt = transformToUse.Apply(pnt);
+                                            pnt = selectedTransform.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                         result[row, 2] = pnt.Z;
@@ -1255,9 +1216,9 @@ namespace ProjExcel
 
                                         var pnt = new PPoint(sx, sy, sz, st);
                                         if (reversed)
-                                            pnt = transformToUse.ApplyReversed(pnt);
+                                            pnt = selectedTransform.ApplyReversed(pnt);
                                         else
-                                            pnt = transformToUse.Apply(pnt);
+                                            pnt = selectedTransform.Apply(pnt);
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
                                         result[row, 2] = pnt.Z;
@@ -1300,19 +1261,14 @@ namespace ProjExcel
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, coordinateTransformOptions, pc))
                     {
-                        if (trf == null)
-                            return "#ERR: No mathematical transformation pipeline could be constructed.";
-
-                        CoordinateTransform transformToUse = optionValues.CandidateIndex == 0
-                            ? trf
-                            : SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
 
                         double x = testPoint.GetLength(1) > 0 ? (double)testPoint[0, 0] : 0.0;
                         double y = testPoint.GetLength(1) > 1 ? (double)testPoint[0, 1] : 0.0;
                         double z = testPoint.GetLength(1) > 2 ? (double)testPoint[0, 2] : 0.0;
                         PPoint pt = new PPoint(x, y, z);
 
-                        double error = transformToUse.RoundTrip(true, nTrips, pt);
+                        double error = selectedTransform.RoundTrip(true, nTrips, pt);
 
                         if (Double.IsInfinity(error))
                             return "#ERR: Infinite roundtrip error";
