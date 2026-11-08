@@ -24,3 +24,4 @@
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
 - In ProjExcel Trf.cs, prefer explicit if/else over a multiline conditional expression for transform candidate selection when it improves readability.
 - In Trf.cs, remove the no-explicit-options path using `CoordinateTransform.Create(src,dst,pc)` and delete `HasExplicitCreateOptions`; always create source/target CRS transforms with `CoordinateTransform.Create(src,dst,coordinateTransformOptions,pc)`. Rename `CreateTransformWithOptionalOptions` to `CreateTransformWithOptions`, retaining options-based fallback behavior unless separately requested.
+- For ProjExcel Excel-facing transform UDFs, use argument order: CRS inputs → task-specific inputs → transform options → other optional presentation settings. Preserve practical order such as PE.trf.Apply(source, target, x, y, options); do not force transformOptions into third position.

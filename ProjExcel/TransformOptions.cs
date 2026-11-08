@@ -512,6 +512,16 @@ namespace ProjExcel
             if (ParseBooleanOrDefault(forceOver, false))
                 parts.Add("ForceOver=True");
 
+            if (!Optional.IsEmpty(intermediateCrsUsage) &&
+                !string.IsNullOrWhiteSpace(Convert.ToString(intermediateCrsUsage)))
+            {
+                string inputUsage = Convert.ToString(intermediateCrsUsage).Trim();
+                if (!string.Equals(inputUsage, "Auto", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(inputUsage, "Always", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(inputUsage, "Never", StringComparison.OrdinalIgnoreCase))
+                    return "#ERR: IntermediateCrsUsage must be Auto, Always, or Never.";
+            }
+
             string usage = ParseIntermediateCrsUsageOrDefault(intermediateCrsUsage);
             if (usage != "Auto")
                 parts.Add("IntermediateCrsUsage=" + usage);
