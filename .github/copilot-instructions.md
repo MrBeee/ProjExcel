@@ -19,6 +19,8 @@
 - PE.trf.OptionsEx should be a standalone Excel UDF with direct arguments for transform and PROJ context settings; do not require end users to nest PE.trf.Options() inside PE.trf.OptionsEx().
 - When proposing changes to ApplyCore to use per-call context overrides, explicitly note ProjService.CreateContext currently takes no parameters and show the required overload or equivalent concrete implementation; do not present an overload call as though it already exists.
 - Centralize null-transform validation in SelectCandidateTransform with ArgumentException("No mathematical transformation pipeline could be constructed.") for transform UDFs that select a candidate, instead of duplicating null checks at each call site, while respecting list-all and chooser semantics.
+- Retain ProjExcel API review recommendations: align PE.trf and PE.crs Excel-facing CRS input shapes where practical; maintain CRS → task inputs → options → presentation ordering; explicitly map stable scalar/identifier fields rather than reflection/ToString; improve unavailable-operation diagnostics and consistent #ERR handling/input validation (including >4 ApplyEx columns); prioritize input compatibility and invalid-operation diagnostics, not mirroring every CRS UDF.
+- Prefer a single CRS value with authority preceding code separated by a semicolon, consistent with Trf.cs; do not recommend adding two-cell CRS inputs to PE.trf.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
