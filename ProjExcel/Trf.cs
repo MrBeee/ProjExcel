@@ -230,8 +230,10 @@ namespace ProjExcel
         };
 
         [ExcelFunction(Name = "PE.trf.ListTransformProperties", Description = "List accessible coordinate transform properties by name and index")]
-        public static object ListTransformProperties()
+        public static object ListTransformProperties(
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null)
         {
+            bool bTranspose = Optional.Check(transpose, false);
             string[] reflectedNames = typeof(CoordinateTransform)
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
                 .Where(p => p.GetIndexParameters().Length == 0 && p.CanRead)
@@ -258,12 +260,13 @@ namespace ProjExcel
                 result[i + 1, 1] = TransformPropertyNames[i];
             }
 
-            return result;
+            return bTranspose ? TransposeObjectArray(result) : result;
         }
 
         [ExcelFunction(Name = "PE.trf.ListContextSettings", Description = "List default or token-overridden PROJ context settings")]
         public static object ListContextSettings(
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.OptionsEx() (blank = defaults)")] object options = null)
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.OptionsEx() (blank = defaults)")] object options = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null)
         {
             object raw = options;
             if (raw is object[,] matrix)
@@ -283,7 +286,7 @@ namespace ProjExcel
             TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(raw);
             ProjService defaults = ProjService.Default;
 
-            return new object[,]
+            object[,] result = new object[,]
             {
                 { "Setting", "Value" },
                 { "EnableNetworkConnections", values.EnableNetworkConnections ?? defaults.EnableNetworkConnections },
@@ -294,6 +297,7 @@ namespace ProjExcel
                 { "GridCachePath", values.GridCachePath ?? defaults.GridCachePath },
                 { "LogLevel", (values.LogLevel ?? defaults.LogLevel).ToString() }
             };
+            return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
         }
 
         [ExcelFunction(Name = "PE.trf.Properties", Description = "Show transform properties selected by index or name in a row")]
@@ -302,7 +306,8 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -353,7 +358,8 @@ namespace ProjExcel
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -367,7 +373,7 @@ namespace ProjExcel
                     CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
                     UsageArea area = selectedTransform.UsageArea;
 
-                    return new object[,]
+                    object[,] result = new object[,]
                     {
                         { "Property", "Value" },
                         { "Name", area == null ? nullValueText : SafeCandidateValue(area.Name, nullValueText) },
@@ -378,6 +384,7 @@ namespace ProjExcel
                         { "CenterX", area == null || double.IsNaN(area.CenterX) || double.IsInfinity(area.CenterX) ? (object)nullValueText : area.CenterX },
                         { "CenterY", area == null || double.IsNaN(area.CenterY) || double.IsInfinity(area.CenterY) ? (object)nullValueText : area.CenterY }
                     };
+                    return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
                 }
             }
             catch (System.Exception ex)
@@ -540,6 +547,34 @@ namespace ProjExcel
 
 
 
+        [ExcelFunction(Name = "PE.trf.ListTransformParameters", Description = "List parameters of the selected transform and its steps")]
+        public static object ListTransformParameters(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+
+            try
+            {
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    object[,] result = BuildTransformParametersResult(selectedTransform, nullValueText, true);
+                    return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
         [ExcelFunction(Name = "PE.trf.ListTransformSteps", Description = "List the steps in the transform (pipeline) from source CRS to target CRS")]
         public static object ListTransformSteps(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
@@ -658,7 +693,8 @@ namespace ProjExcel
             [ExcelArgument(Name = "step number", Description = "Step nr to draw information from. Default = 0")] object oStepNumber,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -702,6 +738,40 @@ namespace ProjExcel
                     }
 
                     return result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.ListStepParameters", Description = "List parameters of a step in the selected transform")]
+        public static object ListStepParameters(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "stepNumber", Description = "Zero-based step number. Default = 0")] object oStepNumber,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+
+            try
+            {
+                int stepNumber = Optional.Check(oStepNumber, 0);
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    List<CoordinateTransform> steps = GetTransformSteps(selectedTransform);
+                    if (stepNumber < 0 || stepNumber >= steps.Count)
+                        return "#ERR: Step Index for transform out of range.";
+
+                    object[,] result = BuildTransformParametersResult(steps[stepNumber], nullValueText);
+                    return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
                 }
             }
             catch (System.Exception ex)
@@ -985,6 +1055,64 @@ namespace ProjExcel
                 return new List<CoordinateTransform> { selectedTransform };
 
             return stepList.ToList();
+        }
+
+        private static object[,] BuildTransformParametersResult(CoordinateTransform transform, string nullValueText, bool includeSteps = false)
+        {
+            var parameters = new List<KeyValuePair<int?, CoordinateTransformParameter>>();
+            if (transform.Parameters != null)
+            {
+                foreach (CoordinateTransformParameter parameter in transform.Parameters)
+                    parameters.Add(new KeyValuePair<int?, CoordinateTransformParameter>(null, parameter));
+            }
+
+            if (includeSteps && transform is CoordinateTransformList steps)
+            {
+                for (int stepNumber = 0; stepNumber < steps.Count; stepNumber++)
+                {
+                    if (steps[stepNumber].Parameters == null)
+                        continue;
+
+                    foreach (CoordinateTransformParameter parameter in steps[stepNumber].Parameters)
+                        parameters.Add(new KeyValuePair<int?, CoordinateTransformParameter>(stepNumber, parameter));
+                }
+            }
+
+            int rowOffset = includeSteps ? 1 : 0;
+            object[,] result = new object[9 + rowOffset, parameters.Count + 1];
+            result[0, 0] = "Parameter Number";
+            if (includeSteps)
+                result[1, 0] = "Step Number";
+            result[1 + rowOffset, 0] = "Name";
+            result[2 + rowOffset, 0] = "Value";
+            result[3 + rowOffset, 0] = "ValueString";
+            result[4 + rowOffset, 0] = "UnitName";
+            result[5 + rowOffset, 0] = "UnitCategory";
+            result[6 + rowOffset, 0] = "UnitConversionFactor";
+            result[7 + rowOffset, 0] = "Identifier";
+            result[8 + rowOffset, 0] = "UnitIdentifier";
+
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                CoordinateTransformParameter parameter = parameters[i].Value;
+                result[0, i + 1] = i;
+                if (includeSteps)
+                    result[1, i + 1] = parameters[i].Key.HasValue ? (object)parameters[i].Key.Value : nullValueText;
+                result[1 + rowOffset, i + 1] = SafeTransformStepValue(parameter.Name, nullValueText);
+                result[2 + rowOffset, i + 1] = double.IsNaN(parameter.Value) || double.IsInfinity(parameter.Value)
+                    ? (object)nullValueText : parameter.Value;
+                result[3 + rowOffset, i + 1] = SafeTransformStepValue(parameter.ValueString, nullValueText);
+                result[4 + rowOffset, i + 1] = SafeTransformStepValue(parameter.UnitName, nullValueText);
+                result[5 + rowOffset, i + 1] = SafeTransformStepValue(parameter.UnitCategory, nullValueText);
+                result[6 + rowOffset, i + 1] = double.IsNaN(parameter.UnitConversionFactor) || double.IsInfinity(parameter.UnitConversionFactor)
+                    ? (object)nullValueText : parameter.UnitConversionFactor;
+                result[7 + rowOffset, i + 1] = string.IsNullOrWhiteSpace(parameter.AuthName) || string.IsNullOrWhiteSpace(parameter.Code)
+                    ? nullValueText : parameter.AuthName + ":" + parameter.Code;
+                result[8 + rowOffset, i + 1] = string.IsNullOrWhiteSpace(parameter.UnitAuthName) || string.IsNullOrWhiteSpace(parameter.UnitCode)
+                    ? nullValueText : parameter.UnitAuthName + ":" + parameter.UnitCode;
+            }
+
+            return result;
         }
 
         private static object[,] BuildTransformStepsResult(IList<CoordinateTransform> steps, int outputFormat, string nullValueText, bool bTranspose)

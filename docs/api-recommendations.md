@@ -2,13 +2,15 @@
 
 ## Transform parameters
 
-`PE.trf.Properties` and `PE.trf.StepProperties` already accept `Parameters`, but format the value generically; no structured parameter-listing UDF exists. `PE.trf.Options` and `PE.trf.ListTransformOperations` describe creation options and PROJ operation tokens, not transform parameters.
+`PE.trf.Properties` and `PE.trf.StepProperties` accept `Parameters`, but format the value generically. `PE.trf.Options` and `PE.trf.ListTransformOperations` describe creation options and PROJ operation tokens, not transform parameters.
 
-1. Add `PE.trf.ListTransformParameters(sourceCrs, targetCrs, transformOptions, ...)` to list the selected candidate's parameters in an Excel table with stable explicit columns and one row per parameter. Document how concatenated operations are represented rather than silently flattening steps.
-2. Add `PE.trf.ListStepParameters(sourceCrs, targetCrs, stepNumber, transformOptions, ...)` to list one step's parameters, using the existing `PE.trf.StepProperties` index convention. This helps diagnose multi-step WKT operations.
+1. `PE.trf.ListTransformParameters(sourceCrs, targetCrs, transformOptions, [nullValues], [transpose])` lists parameters of the selected candidate and its steps. Field names occupy the first column and each parameter occupies a subsequent column, matching the other transform list UDFs. The Step Number field identifies the zero-based source step; it shows the null placeholder for parameters belonging to the top-level transform. Repeated names from different steps remain separate. Only a transform with no exposed parameters anywhere produces a field-name-only result.
+2. `PE.trf.ListStepParameters(sourceCrs, targetCrs, stepNumber, transformOptions, [nullValues], [transpose])` uses the same orientation to list only one zero-based step's parameters, following the existing `PE.trf.StepProperties` step-index convention. For a transform without a step list, step 0 refers to the transform itself. Use this UDF for focused inspection of a multi-step operation, including CRS-pair transformations such as 4326 → 28992.
 3. Consider `PE.trf.ParameterProperties` for indexed single-parameter lookup only if a real use case emerges; settle the table shape first. Return explicit fields, not SharpProj objects.
 
-Before implementation, verify the element type and supported fields of `CoordinateTransform.Parameters` in the installed SharpProj version. Explicitly map available names, values, units, and identifiers where supported; do not assume grid filename fields exist. Handle absent parameters and unavailable operations clearly. Do not rely on reflection or `ToString()` for Excel-facing parameter serialization, and do not edit `PE.trf.TransformList`.
+The list UDFs explicitly map the installed SharpProj `CoordinateTransformParameter` fields: Name, numeric Value, ValueString, UnitName, UnitCategory, UnitConversionFactor, and parameter/unit authority and code. Missing text and non-finite numeric values use the optional null placeholder. A parameter-free transform or step returns only the field-name column, not an error. These are SharpProj parameter records, not an enumeration of every executable PROJ pipeline token. Do not assume parameter metadata includes grid filenames, infer missing steps from empty parameters, rely on reflection or `ToString()` for parameter serialization, or edit `PE.trf.TransformList`.
+
+Every `PE.trf.List*` UDF ends with an optional `transpose` flag (default `FALSE`); omit it to retain the usual table orientation.
 
 ## Other transform properties
 

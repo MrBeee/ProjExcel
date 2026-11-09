@@ -22,7 +22,7 @@
 - Retain ProjExcel API review recommendations: align PE.trf and PE.crs Excel-facing CRS input shapes where practical; maintain CRS → task inputs → options → presentation ordering; explicitly map stable scalar/identifier fields rather than reflection/ToString; improve unavailable-operation diagnostics and consistent #ERR handling/input validation (including >4 ApplyEx columns); prioritize input compatibility and invalid-operation diagnostics, not mirroring every CRS UDF.
 - Prefer a single CRS value with authority preceding code separated by a semicolon, consistent with Trf.cs; do not recommend adding two-cell CRS inputs to PE.trf.
 - In PE.trf API, use List* names for UDFs returning full tables; reserve *Properties names for property selection/accessors like Properties() and StepProperties(). Rename UsageAreaProperties table UDF accordingly.
-- Keep PE.trf.ListUsageAreaProperties unchanged as a full table UDF. Add a separate PE.trf.UsageAreaProperties selector UDF for requested usage-area properties in a single row; never repurpose ListUsageAreaProperties for selection.
+- PE.trf.ListTransformParameters should list an overview of parameters used throughout the selected transform, including parameters of its steps when the top-level transform has none; a header-only result despite parameterized steps is confusing.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
