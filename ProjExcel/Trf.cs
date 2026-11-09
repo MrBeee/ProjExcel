@@ -167,6 +167,22 @@ namespace ProjExcel
             return transform;
         }
 
+        private static void ValidateTransformForExecution(CoordinateTransform selectedTransform, int candidateIndex)
+        {
+            string[] unavailableGrids = GetTransformGrids(selectedTransform)
+                .Where(grid => !grid.IsAvailable)
+                .Select(grid => !string.IsNullOrWhiteSpace(grid.Name) ? grid.Name : grid.FullName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (unavailableGrids.Length > 0)
+                throw new ArgumentException($"Transform candidate {candidateIndex} is unavailable. Unavailable grids: {string.Join(", ", unavailableGrids)}.");
+
+            if (!selectedTransform.IsAvailable)
+                throw new ArgumentException($"Transform candidate {candidateIndex} is unavailable.");
+        }
+
         internal static int ParseOutputFormatString(object value)
         {
             string output = Convert.ToString(value);
@@ -1301,6 +1317,7 @@ namespace ProjExcel
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                     {
                         CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        ValidateTransformForExecution(selectedTransform, optionValues.CandidateIndex);
 
                         int xRows = x.GetLength(0);
                         int xCols = x.GetLength(1);
@@ -1391,6 +1408,7 @@ namespace ProjExcel
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                     {
                         CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        ValidateTransformForExecution(selectedTransform, optionValues.CandidateIndex);
 
                         int rows = xyzt.GetLength(0);
                         int cols = xyzt.GetLength(1);
@@ -1544,7 +1562,7 @@ namespace ProjExcel
             int nTrips = (int)Optional.Check(oRoundTrips, 1.0);
             // max three adjacent [x, y, z] cells on the same row
             int cols = testPoint.GetLength(1);
-            if (testPoint.GetLength(0) > 1 || cols > 3) return "ERR: need one test point, containing up to three coordinates";
+            if (testPoint.GetLength(0) > 1 || cols > 3) return "#ERR: need one test point, containing up to three coordinates";
 
             try
             {
@@ -1553,6 +1571,7 @@ namespace ProjExcel
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                     {
                         CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                        ValidateTransformForExecution(selectedTransform, optionValues.CandidateIndex);
 
                         double x = testPoint.GetLength(1) > 0 ? (double)testPoint[0, 0] : 0.0;
                         double y = testPoint.GetLength(1) > 1 ? (double)testPoint[0, 1] : 0.0;
