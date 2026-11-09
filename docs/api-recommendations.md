@@ -1,5 +1,16 @@
 # ProjExcel Excel API recommendations
 
+## API maturity against SharpProj
+
+ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the supported `PE.crs.*` and `PE.trf.*` API only; obsolete `PE.xfm.*` functions are not part of the API and are excluded. It is not an exhaustive audit of every SharpProj member. The priority table lists only gaps requiring attention; implemented behavior and design constraints are not action items.
+
+| Priority | Area | Gap requiring attention | Recommended action |
+| --- | --- | --- | --- |
+| P1 | Unavailable operations and error reporting | `PE.trf` non-finite result checks cannot explain why a pipeline or grid is unavailable; supported UDFs do not handle errors consistently. | Report the cause of unavailable operations where possible and align error handling across `PE.crs.*` and `PE.trf.*`. |
+| P2 | CRS input consistency | `PE.crs.*` accepts one- or two-cell CRS ranges, while `PE.trf.*` uses single-value CRS inputs. | Align supported CRS inputs around compatible single-cell values without breaking existing scalar inputs. |
+
+Explicit candidate selection, 2D/3D/4D input handling, transform metadata access, and an error when `BestOnly` cannot be honored already exist; they are not outstanding priorities. The actions above focus on diagnosing failed operations and aligning CRS inputs rather than mirroring every SharpProj member. Keep existing UDF signatures compatible when doing so.
+
 ## Transform parameters
 
 `PE.trf.Properties` and `PE.trf.StepProperties` accept `Parameters`, but format the value generically. `PE.trf.Options` and `PE.trf.ListTransformOperations` describe creation options and PROJ operation tokens, not transform parameters.
@@ -15,7 +26,7 @@ Every `PE.trf.List*` UDF ends with an optional `transpose` flag (default `FALSE`
 ## Other transform properties
 
 1. `PE.trf.ListUsageAreaProperties` returns a complete property/value table for the selected transform's usage area. The separate `PE.trf.UsageAreaProperties` selects named fields and returns one value or a single row for comma-separated names, like `PE.trf.Properties` and `PE.trf.StepProperties`. Both expose Name, WestLongitude, SouthLatitude, EastLongitude, NorthLatitude, CenterX, and CenterY with numeric coordinates and missing metadata represented as missing.
-2. Consider `PE.trf.ListIdentifiers` if users need to inspect multiple identifiers individually. Return each identifier in an Excel-friendly table, explicitly mapping Authority and Code (or formatting them as `AUTHORITY:CODE` in a single cell), instead of joining all identifiers into one property value.
+2. `PE.trf.ListIdentifiers(sourceCrs, targetCrs, transformOptions, [nullValues], [transpose])` lists identifiers of the selected transform candidate individually. When the transform has no identifiers of its own, it falls back to identifiers on its pipeline steps, as `PE.trf.Properties(..., "Identifier", ...)` does. Each identifier occupies a subsequent column as a single `AUTHORITY:CODE` value mapped explicitly from Authority and Code; the `Step Number` row identifies fallback step identifiers and uses the null placeholder for top-level identifiers. A transform with no identifiers anywhere returns only the field-name column.
 
 Do not add a separate UDF for every scalar property such as Name, Accuracy, or HasInverse: `PE.trf.Properties` already retrieves these by stable names. Do not duplicate the existing grid UDFs.
 
@@ -25,5 +36,5 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 - Order arguments CRS inputs → task inputs → transform options → optional presentation settings. Keep `PE.trf.Apply(source, target, x, y, options)`.
 - Use explicit stable scalar and identifier mappings instead of reflection or object serialization; retain discoverable task-oriented UDFs rather than mirroring every CRS or SharpProj member.
 - Improve diagnostics for unavailable operations and steps; the non-finite result checks in `ApplyCore` and `ApplyExCore` are safeguards, not explanations.
-- Use consistent `#ERR` diagnostics and validate inputs, including rejecting more than four `ApplyEx` columns instead of treating them as two.
+- Use consistent `#ERR` diagnostics and validate inputs; `ApplyEx` now rejects more than four coordinate columns instead of treating them as two.
 - Prioritize input compatibility and unavailable-operation diagnostics.

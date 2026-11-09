@@ -41,20 +41,7 @@ namespace ProjExcel
             }
             catch (Exception ex) when ((ex is ProjException || ex is ArgumentNullException) && coordinateTransformOptions.BestOnly)
             {
-                // try to recover from a failed "best only" transform by retrying with BestOnly = false
-                // This is a workaround for cases where the "best only" option fails due to missing grids or other issues,
-                // but a valid transform can still be constructed if we allow multiple candidates.
-
-                // For consistencey, it may be better to throw an exception and let the user handle it, but for now we will try to recover automatically.
-                coordinateTransformOptions.BestOnly = false;
-                try
-                {
-                    return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-                }
-                catch
-                {
-                    throw;  // rethrow the original exception if the second attempt fails
-                }
+                throw new ArgumentException("BestOnly=TRUE is invalid for the chosen transform.", ex);
             }
         }
 
@@ -268,22 +255,13 @@ namespace ProjExcel
             [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.OptionsEx() (blank = defaults)")] object options = null,
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null)
         {
-            object raw = options;
-            if (raw is object[,] matrix)
-            {
-                if (matrix.Length != 1)
-                    return "#ERR: transformOptions must be a single cell.";
-
-                raw = matrix[0, 0];
-            }
-
-            if (raw is ExcelError)
+            if (options is ExcelError)
                 return "#ERR: Invalid transformOptions value.";
 
-            if (raw is string token && token.StartsWith("#ERR:", StringComparison.OrdinalIgnoreCase))
+            if (options is string token && token.StartsWith("#ERR:", StringComparison.OrdinalIgnoreCase))
                 return token;
 
-            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(raw);
+            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
             ProjService defaults = ProjService.Default;
 
             object[,] result = new object[,]
@@ -546,6 +524,81 @@ namespace ProjExcel
 
 
 
+
+        [ExcelFunction(Name = "PE.trf.ListIdentifiers", Description = "List identifiers of the selected transform candidate")]
+        public static object ListIdentifiers(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for missing identifier fields. Default value = \"<null>\"")] object nullValues = null,
+            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+
+            try
+            {
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    var identifiers = new List<KeyValuePair<int?, string>>();
+                    if (selectedTransform.Identifiers != null)
+                    {
+                        foreach (var identifier in selectedTransform.Identifiers)
+                            identifiers.Add(new KeyValuePair<int?, string>(null, identifier == null || string.IsNullOrWhiteSpace(identifier.Authority) || string.IsNullOrWhiteSpace(identifier.Code)
+                                ? nullValueText : identifier.Authority + ":" + identifier.Code));
+                    }
+
+                    if (identifiers.Count == 0 && selectedTransform.Identifier != null)
+                    {
+                        var identifier = selectedTransform.Identifier;
+                        identifiers.Add(new KeyValuePair<int?, string>(null, string.IsNullOrWhiteSpace(identifier.Authority) || string.IsNullOrWhiteSpace(identifier.Code)
+                            ? nullValueText : identifier.Authority + ":" + identifier.Code));
+                    }
+
+                    if (identifiers.Count == 0 && selectedTransform is CoordinateTransformList steps)
+                    {
+                        for (int stepNumber = 0; stepNumber < steps.Count; stepNumber++)
+                        {
+                            CoordinateTransform step = steps[stepNumber];
+                            if (step.Identifiers != null && step.Identifiers.Count > 0)
+                            {
+                                foreach (var identifier in step.Identifiers)
+                                    identifiers.Add(new KeyValuePair<int?, string>(stepNumber, identifier == null || string.IsNullOrWhiteSpace(identifier.Authority) || string.IsNullOrWhiteSpace(identifier.Code)
+                                        ? nullValueText : identifier.Authority + ":" + identifier.Code));
+                            }
+                            else if (step.Identifier != null)
+                            {
+                                var identifier = step.Identifier;
+                                identifiers.Add(new KeyValuePair<int?, string>(stepNumber, string.IsNullOrWhiteSpace(identifier.Authority) || string.IsNullOrWhiteSpace(identifier.Code)
+                                    ? nullValueText : identifier.Authority + ":" + identifier.Code));
+                            }
+                        }
+                    }
+
+                    int count = identifiers.Count;
+                    object[,] result = new object[3, count + 1];
+                    result[0, 0] = "Identifier Number";
+                    result[1, 0] = "Step Number";
+                    result[2, 0] = "Identifier";
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        result[0, i + 1] = i;
+                        result[1, i + 1] = identifiers[i].Key.HasValue ? (object)identifiers[i].Key.Value : nullValueText;
+                        result[2, i + 1] = identifiers[i].Value;
+                    }
+
+                    return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
 
         [ExcelFunction(Name = "PE.trf.ListTransformParameters", Description = "List parameters of the selected transform and its steps")]
         public static object ListTransformParameters(
@@ -1348,13 +1401,15 @@ namespace ProjExcel
                         if (cols < 2)
                             return "#ERR: Need (at least) two adjacent columns for X- and Y-values";
 
+                        if (cols > 4)
+                            return "#ERR: Need no more than four adjacent columns for X-, Y-, Z-, and T-values";
+
                             // start core of function
                             object[,] result = new object[rows, cols];
 
                             // work with nr of input columns
                             switch (cols)
                             {
-                                default:
                                 case 2:
                                     // we have two columns (x, y) in the input data
                                     for (int row = 0; row < rows; row++)
