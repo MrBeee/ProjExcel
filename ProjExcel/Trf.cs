@@ -348,6 +348,106 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.trf.ListUsageAreaProperties", Description = "List the selected transform's usage area properties")]
+        public static object ListUsageAreaProperties(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+
+            try
+            {
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    UsageArea area = selectedTransform.UsageArea;
+
+                    return new object[,]
+                    {
+                        { "Property", "Value" },
+                        { "Name", area == null ? nullValueText : SafeCandidateValue(area.Name, nullValueText) },
+                        { "WestLongitude", area == null || double.IsNaN(area.WestLongitude) || double.IsInfinity(area.WestLongitude) ? (object)nullValueText : area.WestLongitude },
+                        { "SouthLatitude", area == null || double.IsNaN(area.SouthLatitude) || double.IsInfinity(area.SouthLatitude) ? (object)nullValueText : area.SouthLatitude },
+                        { "EastLongitude", area == null || double.IsNaN(area.EastLongitude) || double.IsInfinity(area.EastLongitude) ? (object)nullValueText : area.EastLongitude },
+                        { "NorthLatitude", area == null || double.IsNaN(area.NorthLatitude) || double.IsInfinity(area.NorthLatitude) ? (object)nullValueText : area.NorthLatitude },
+                        { "CenterX", area == null || double.IsNaN(area.CenterX) || double.IsInfinity(area.CenterX) ? (object)nullValueText : area.CenterX },
+                        { "CenterY", area == null || double.IsNaN(area.CenterY) || double.IsInfinity(area.CenterY) ? (object)nullValueText : area.CenterY }
+                    };
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.UsageAreaProperties", Description = "Show selected transform usage area properties by name in a row")]
+        public static object UsageAreaProperties(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "properties", Description = "Comma-separated usage area property names: Name, WestLongitude, SouthLatitude, EastLongitude, NorthLatitude, CenterX, CenterY")] object properties,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
+            )
+        {
+            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+            string nullValueText = Optional.Check(nullValues, "<null>");
+
+            try
+            {
+                string[] propertyNames = { "Name", "WestLongitude", "SouthLatitude", "EastLongitude", "NorthLatitude", "CenterX", "CenterY" };
+                if (Optional.IsEmpty(properties))
+                    return "#ERR: Property is required.";
+
+                bool multipleProperties = properties is string names && names.Contains(",");
+                string[] requestedProperties = multipleProperties ? ((string)properties).Split(',') : new[] { Convert.ToString(properties) };
+                int[] propertyIndices = new int[requestedProperties.Length];
+                for (int i = 0; i < requestedProperties.Length; i++)
+                {
+                    string name = requestedProperties[i].Trim();
+                    propertyIndices[i] = Array.FindIndex(propertyNames, value => string.Equals(value, name, StringComparison.OrdinalIgnoreCase));
+                    if (propertyIndices[i] < 0)
+                        return $"#ERR: Unknown usage area property '{name}'. Valid properties: {string.Join(", ", propertyNames)}.";
+                }
+
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    UsageArea area = selectedTransform.UsageArea;
+
+                    object[] values =
+                    {
+                        area == null ? nullValueText : SafeCandidateValue(area.Name, nullValueText),
+                        area == null || double.IsNaN(area.WestLongitude) || double.IsInfinity(area.WestLongitude) ? (object)nullValueText : area.WestLongitude,
+                        area == null || double.IsNaN(area.SouthLatitude) || double.IsInfinity(area.SouthLatitude) ? (object)nullValueText : area.SouthLatitude,
+                        area == null || double.IsNaN(area.EastLongitude) || double.IsInfinity(area.EastLongitude) ? (object)nullValueText : area.EastLongitude,
+                        area == null || double.IsNaN(area.NorthLatitude) || double.IsInfinity(area.NorthLatitude) ? (object)nullValueText : area.NorthLatitude,
+                        area == null || double.IsNaN(area.CenterX) || double.IsInfinity(area.CenterX) ? (object)nullValueText : area.CenterX,
+                        area == null || double.IsNaN(area.CenterY) || double.IsInfinity(area.CenterY) ? (object)nullValueText : area.CenterY
+                    };
+
+                    if (!multipleProperties)
+                        return values[propertyIndices[0]];
+
+                    object[,] result = new object[1, propertyIndices.Length];
+                    for (int i = 0; i < propertyIndices.Length; i++)
+                        result[0, i] = values[propertyIndices[i]];
+
+                    return result;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
         [ExcelFunction(Name = "PE.trf.ListTransforms", Description = "Create a list of available transforms between source and target CRS")]
         public static object ListTransforms(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,

@@ -12,7 +12,7 @@ Before implementation, verify the element type and supported fields of `Coordina
 
 ## Other transform properties
 
-1. Add `PE.trf.UsageAreaProperties` for the selected transform's usage area. Expose Name, WestLongitude, SouthLatitude, EastLongitude, NorthLatitude, CenterX, and CenterY as explicitly mapped, Excel-friendly fields; return bounds and center coordinates as numbers, not a string requiring parsing. Report missing area metadata as missing rather than deriving it from the CRS or input coordinates. `PE.trf.Properties` already formats UsageArea as a single string, and transform and step listings show its individual fields, but neither provides direct structured access to the selected transform's numeric area fields.
+1. `PE.trf.ListUsageAreaProperties` returns a complete property/value table for the selected transform's usage area. The separate `PE.trf.UsageAreaProperties` selects named fields and returns one value or a single row for comma-separated names, like `PE.trf.Properties` and `PE.trf.StepProperties`. Both expose Name, WestLongitude, SouthLatitude, EastLongitude, NorthLatitude, CenterX, and CenterY with numeric coordinates and missing metadata represented as missing.
 2. Consider `PE.trf.ListIdentifiers` if users need to inspect multiple identifiers individually. Return each identifier in an Excel-friendly table, explicitly mapping Authority and Code (or formatting them as `AUTHORITY:CODE` in a single cell), instead of joining all identifiers into one property value.
 
 Do not add a separate UDF for every scalar property such as Name, Accuracy, or HasInverse: `PE.trf.Properties` already retrieves these by stable names. Do not duplicate the existing grid UDFs.
