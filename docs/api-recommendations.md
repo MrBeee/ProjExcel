@@ -39,6 +39,82 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 - Use consistent `#ERR` diagnostics and validate inputs; `ApplyEx` now rejects more than four coordinate columns instead of treating them as two.
 - Prioritize input compatibility and unavailable-operation diagnostics.
 
+## PE.crs.* deprecation candidates
+
+The following legacy UDFs have values available through the curated `*Properties()` accessors. This is a recommendation for new worksheets, **not** a recommendation to remove or disable existing functions: saved workbooks must continue to work. Match the old `Normalized` setting where applicable. Missing-value placeholders, error results, and the shape of some older returns may differ, so replacements are not necessarily drop-in equivalent for every input.
+
+### Use `PE.crs.Properties(crs, property, normalized)`
+
+- `PE.crs.Axis.Count`
+- `PE.crs.CelestialBodyName`
+- `PE.crs.CoordinateSystem.Axis.Count`
+- `PE.crs.CoordinateSystem.CoordinateSystemType`
+- `PE.crs.CoordinateSystem.Name`
+- `PE.crs.CoordinateSystem.Type`
+- `PE.crs.Datum.Name`
+- `PE.crs.Datum.Type`
+- `PE.crs.Ellipsoid.InverseFlattening`
+- `PE.crs.Ellipsoid.IsSemiMinorComputed`
+- `PE.crs.Ellipsoid.Name`
+- `PE.crs.Ellipsoid.SemiMajorMetre`
+- `PE.crs.Ellipsoid.SemiMinorMetre`
+- `PE.crs.Ellipsoid.Type`
+- `PE.crs.GeodeticCRS.Name`
+- `PE.crs.GeodeticCRS.Type`
+- `PE.crs.Identifiers.Count`
+- `PE.crs.IsDeprecated`
+- `PE.crs.Name`
+- `PE.crs.PrimeMeridian.Longitude`
+- `PE.crs.PrimeMeridian.Name`
+- `PE.crs.PrimeMeridian.UnitConversionFactor`
+- `PE.crs.PrimeMeridian.UnitName`
+- `PE.crs.Remarks`
+- `PE.crs.Scope`
+- `PE.crs.Type`
+- `PE.crs.UsageArea.Center.HasValues`
+- `PE.crs.UsageArea.Center.X`
+- `PE.crs.UsageArea.Center.Y`
+- `PE.crs.UsageArea.EastLongitude`
+- `PE.crs.UsageArea.MaxX`
+- `PE.crs.UsageArea.MaxY`
+- `PE.crs.UsageArea.MinX`
+- `PE.crs.UsageArea.MinY`
+- `PE.crs.UsageArea.Name`
+- `PE.crs.UsageArea.NorthLatitude`
+- `PE.crs.UsageArea.SouthLatitude`
+- `PE.crs.UsageArea.WestLongitude`
+
+`PE.crs.UsageArea.Center` can instead use `PE.crs.Properties(crs, "UsageArea.Center.X,UsageArea.Center.Y", normalized)` for the two adjacent values. This is a combined-value UDF rather than a single named property.
+
+### Use `PE.crs.AxisProperties(crs, axisIndex, property, coordinateSystemAxis, normalized)`
+
+For `PE.crs.Axis.*`, set `coordinateSystemAxis` to `FALSE` (default):
+
+- `PE.crs.Axis.Abbreviation`
+- `PE.crs.Axis.Direction`
+- `PE.crs.Axis.Name`
+- `PE.crs.Axis.UnitAuthName`
+- `PE.crs.Axis.UnitCode`
+- `PE.crs.Axis.UnitConversionFactor`
+- `PE.crs.Axis.UnitName`
+
+For `PE.crs.CoordinateSystem.Axis.*`, set `coordinateSystemAxis` to `TRUE`:
+
+- `PE.crs.CoordinateSystem.Axis.Abbreviation`
+- `PE.crs.CoordinateSystem.Axis.Direction`
+- `PE.crs.CoordinateSystem.Axis.Name`
+- `PE.crs.CoordinateSystem.Axis.UnitAuthName`
+- `PE.crs.CoordinateSystem.Axis.UnitCode`
+- `PE.crs.CoordinateSystem.Axis.UnitConversionFactor`
+- `PE.crs.CoordinateSystem.Axis.UnitName`
+
+### Use `PE.crs.IdentifierProperties(crs, identifierIndex, property)`
+
+Identifier properties read the original (unnormalized) CRS. Existing identifier UDFs default to `Normalized=FALSE`; they can return different results when explicitly called with `Normalized=TRUE`.
+
+- `PE.crs.Identifiers.Authority`
+- `PE.crs.Identifiers.Code`
+
 ## PE.crs.* functions
 
 - `PE.crs.AsJsonString`

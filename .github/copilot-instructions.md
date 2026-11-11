@@ -22,8 +22,9 @@
 - Retain ProjExcel API review recommendations: align PE.trf and PE.crs Excel-facing CRS input shapes where practical; maintain CRS → task inputs → options → presentation ordering; explicitly map stable scalar/identifier fields rather than reflection/ToString; improve unavailable-operation diagnostics and consistent #ERR handling/input validation (including >4 ApplyEx columns); prioritize input compatibility and invalid-operation diagnostics, not mirroring every CRS UDF.
 - Prefer a single CRS value with authority preceding code separated by a semicolon, consistent with Trf.cs; do not recommend adding two-cell CRS inputs to PE.trf.
 - In PE.trf API, use List* names for UDFs returning full tables; reserve *Properties names for property selection/accessors like Properties() and StepProperties(). Rename UsageAreaProperties table UDF accordingly.
-- When adding a curated List/Properties API for PE.crs, do not remove any existing CRS routines; preserve workbook compatibility.
+- When adding a curated List/Properties API for PE.crs, do not remove any existing CRS routines; preserve workbook compatibility. After checking and updating spreadsheet usage, remove legacy PE.crs scalar/axis/identifier UDFs superseded by curated Properties accessors as soon as workbook compatibility is confirmed; do not remove before the audit.
 - For PE.crs property-name lists, keep entries in alphabetical order rather than appending to preserve numeric indices; numeric property access is rarely used.
+- Do not implement the speculative PE.crs.SysCode, DatumCode, BaseCRScode, ProjnConvCode, Cmpd.HorCRS, Cmpd.VertCRS, InformationSource, DataSource, RevisionDate, ChangeID, or ShowCrs UDF proposals without a concrete SharpProj-backed use case; favor the existing curated CRS API.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
