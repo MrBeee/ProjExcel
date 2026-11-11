@@ -38,3 +38,105 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 - Improve diagnostics for unavailable operations and steps; the non-finite result checks in `ApplyCore` and `ApplyExCore` are safeguards, not explanations.
 - Use consistent `#ERR` diagnostics and validate inputs; `ApplyEx` now rejects more than four coordinate columns instead of treating them as two.
 - Prioritize input compatibility and unavailable-operation diagnostics.
+
+## PE.crs.* functions
+
+- `PE.crs.AsJsonString`
+- `PE.crs.AsProjString`
+- `PE.crs.AsWktString`
+- `PE.crs.Axis.Abbreviation`
+- `PE.crs.Axis.Count`
+- `PE.crs.Axis.Direction`
+- `PE.crs.Axis.Name`
+- `PE.crs.Axis.UnitAuthName`
+- `PE.crs.Axis.UnitCode`
+- `PE.crs.Axis.UnitConversionFactor`
+- `PE.crs.Axis.UnitName`
+- `PE.crs.AxisProperties`
+- `PE.crs.CelestialBodyName`
+- `PE.crs.CoordinateSystem.Axis.Abbreviation`
+- `PE.crs.CoordinateSystem.Axis.Count`
+- `PE.crs.CoordinateSystem.Axis.Direction`
+- `PE.crs.CoordinateSystem.Axis.Name`
+- `PE.crs.CoordinateSystem.Axis.UnitAuthName`
+- `PE.crs.CoordinateSystem.Axis.UnitCode`
+- `PE.crs.CoordinateSystem.Axis.UnitConversionFactor`
+- `PE.crs.CoordinateSystem.Axis.UnitName`
+- `PE.crs.CoordinateSystem.CoordinateSystemType`
+- `PE.crs.CoordinateSystem.Name`
+- `PE.crs.CoordinateSystem.Type`
+- `PE.crs.Datum.Name`
+- `PE.crs.Datum.Type`
+- `PE.crs.Ellipsoid.InverseFlattening`
+- `PE.crs.Ellipsoid.IsSemiMinorComputed`
+- `PE.crs.Ellipsoid.Name`
+- `PE.crs.Ellipsoid.SemiMajorMetre`
+- `PE.crs.Ellipsoid.SemiMinorMetre`
+- `PE.crs.Ellipsoid.Type`
+- `PE.crs.EuclideanArea`
+- `PE.crs.EuclideanDistance`
+- `PE.crs.EuclideanDistanceZ`
+- `PE.crs.GeodesicArea`
+- `PE.crs.GeodesicDistance`
+- `PE.crs.GeodesicDistanceZ`
+- `PE.crs.GeodeticCRS.Name`
+- `PE.crs.GeodeticCRS.Type`
+- `PE.crs.IdentifierProperties`
+- `PE.crs.Identifiers.Authority`
+- `PE.crs.Identifiers.Code`
+- `PE.crs.Identifiers.Count`
+- `PE.crs.IsDeprecated`
+- `PE.crs.IsEquivalentTo`
+- `PE.crs.IsEquivalentToRelaxed`
+- `PE.crs.ListAxisProperties`
+- `PE.crs.ListCrsProperties`
+- `PE.crs.ListIdentifierProperties`
+- `PE.crs.Name`
+- `PE.crs.PrimeMeridian.Longitude`
+- `PE.crs.PrimeMeridian.Name`
+- `PE.crs.PrimeMeridian.UnitConversionFactor`
+- `PE.crs.PrimeMeridian.UnitName`
+- `PE.crs.Properties`
+- `PE.crs.Remarks`
+- `PE.crs.Scope`
+- `PE.crs.ToString`
+- `PE.crs.Type`
+- `PE.crs.UsageArea.Center`
+- `PE.crs.UsageArea.Center.HasValues`
+- `PE.crs.UsageArea.Center.X`
+- `PE.crs.UsageArea.Center.Y`
+- `PE.crs.UsageArea.EastLongitude`
+- `PE.crs.UsageArea.MaxX`
+- `PE.crs.UsageArea.MaxY`
+- `PE.crs.UsageArea.MinX`
+- `PE.crs.UsageArea.MinY`
+- `PE.crs.UsageArea.Name`
+- `PE.crs.UsageArea.NorthLatitude`
+- `PE.crs.UsageArea.SouthLatitude`
+- `PE.crs.UsageArea.WestLongitude`
+
+## PE.trf.* functions
+
+- `PE.trf.Apply`
+- `PE.trf.ApplyEx`
+- `PE.trf.ApplyReversed`
+- `PE.trf.ApplyReversedEx`
+- `PE.trf.GridProperties`
+- `PE.trf.ListContextSettings`
+- `PE.trf.ListIdentifiers`
+- `PE.trf.ListStepParameters`
+- `PE.trf.ListTransformGrids`
+- `PE.trf.ListTransformOperations`
+- `PE.trf.ListTransformParameters`
+- `PE.trf.ListTransformProperties`
+- `PE.trf.ListTransformSteps`
+- `PE.trf.ListTransforms`
+- `PE.trf.ListUsageAreaProperties`
+- `PE.trf.Options`
+- `PE.trf.OptionsEx`
+- `PE.trf.Properties`
+- `PE.trf.Roundtrip`
+- `PE.trf.StepCount`
+- `PE.trf.StepProperties`
+- `PE.trf.ToString`
+- `PE.trf.UsageAreaProperties`
