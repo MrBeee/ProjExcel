@@ -97,15 +97,24 @@ namespace ProjExcel
                     CandidateIndex = 0
                 };
 
-                if (oOptions == null || oOptions == DBNull.Value || oOptions == Type.Missing)
+                if (oOptions == null || oOptions == DBNull.Value || oOptions == Type.Missing || oOptions is ExcelMissing || oOptions is ExcelEmpty)
                     return values;
 
                 object raw = oOptions;
                 object[,] matrix = raw as object[,];
-                if (matrix != null && matrix.Length == 1)
+                if (matrix != null)
+                {
+                    if (matrix.Length != 1)
+                        throw new ArgumentException("transformOptions must be a single cell.");
                     raw = matrix[0, 0];
+                }
 
-                string token = Convert.ToString(raw);
+                if (raw == null || raw == DBNull.Value || raw == Type.Missing || raw is ExcelMissing || raw is ExcelEmpty)
+                    return values;
+                if (!(raw is string))
+                    throw new ArgumentException("transformOptions must contain a transform options token.");
+
+                string token = (string)raw;
                 if (string.IsNullOrWhiteSpace(token))
                     return values;
 
@@ -114,57 +123,80 @@ namespace ProjExcel
                 {
                     string[] keyValue = part.Split(new[] { '=' }, 2);
                     if (keyValue.Length != 2)
-                        continue;
+                        throw new ArgumentException($"Invalid transform option token '{part.Trim()}': expected Name=Value.");
 
                     string key = keyValue[0].Trim();
                     string value = keyValue[1].Trim();
+                    if (key.Length == 0)
+                        throw new ArgumentException($"Invalid transform option token '{part.Trim()}': option name is required.");
+                    if (value.Length == 0)
+                        throw new ArgumentException($"Transform option '{key}' requires a value.");
 
                     if (string.Equals(key, "Authority", StringComparison.OrdinalIgnoreCase))
                         values.Authority = string.IsNullOrWhiteSpace(value) ? null : value;
                     else if (string.Equals(key, "Accuracy", StringComparison.OrdinalIgnoreCase))
-                        values.Accuracy = ParseNullableDoubleOrDefault(value, null);
+                    {
+                        if (!double.TryParse(value, out double accuracy) || double.IsNaN(accuracy) || double.IsInfinity(accuracy) || accuracy < 0)
+                            throw new ArgumentException($"Accuracy must be a non-negative finite number (received '{value}').");
+                        values.Accuracy = accuracy;
+                    }
                     else if (string.Equals(key, "NoBallparkConversions", StringComparison.OrdinalIgnoreCase))
-                        values.NoBallparkConversions = ParseBooleanOrDefault(value, false);
+                        values.NoBallparkConversions = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "NoDiscardIfMissing", StringComparison.OrdinalIgnoreCase))
-                        values.NoDiscardIfMissing = ParseBooleanOrDefault(value, false);
+                        values.NoDiscardIfMissing = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "UsePrimaryGridNames", StringComparison.OrdinalIgnoreCase))
-                        values.UsePrimaryGridNames = ParseBooleanOrDefault(value, false);
+                        values.UsePrimaryGridNames = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "UseSuperseded", StringComparison.OrdinalIgnoreCase))
-                        values.UseSuperseded = ParseBooleanOrDefault(value, false);
+                        values.UseSuperseded = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "StrictContains", StringComparison.OrdinalIgnoreCase))
-                        values.StrictContains = ParseBooleanOrDefault(value, false);
+                        values.StrictContains = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "BestOnly", StringComparison.OrdinalIgnoreCase))
-                        values.BestOnly = ParseBooleanOrDefault(value, false);
+                        values.BestOnly = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "ForceOver", StringComparison.OrdinalIgnoreCase))
-                        values.ForceOver = ParseBooleanOrDefault(value, false);
+                        values.ForceOver = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "IntermediateCrsUsage", StringComparison.OrdinalIgnoreCase))
                     {
-                        string usage = ParseIntermediateCrsUsageOrDefault(value);
-                        if (string.Equals(usage, "Always", StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(value, "Always", StringComparison.OrdinalIgnoreCase))
                             values.IntermediateCrsUsage = IntermediateCrsUsage.Always;
-                        else if (string.Equals(usage, "Never", StringComparison.OrdinalIgnoreCase))
+                        else if (string.Equals(value, "Never", StringComparison.OrdinalIgnoreCase))
                             values.IntermediateCrsUsage = IntermediateCrsUsage.Never;
-                        else
+                        else if (string.Equals(value, "Auto", StringComparison.OrdinalIgnoreCase))
                             values.IntermediateCrsUsage = IntermediateCrsUsage.Auto;
+                        else
+                            throw new ArgumentException($"IntermediateCrsUsage must be Auto, Always, or Never (received '{value}').");
                     }
                     else if (string.Equals(key, "Area", StringComparison.OrdinalIgnoreCase))
-                        values.Area = ParseAreaOrDefault(value, values.Area);
+                    {
+                        CoordinateArea area = ParseAreaOrDefault(value, null);
+                        if (area == null)
+                            throw new ArgumentException($"Area must contain four numeric coordinates: west,south,east,north (received '{value}').");
+                        values.Area = area;
+                    }
 
                     else if (string.Equals(key, "AllowDeprecatedCrs", StringComparison.OrdinalIgnoreCase) || string.Equals(key, "AllowDeprecatedCRS", StringComparison.OrdinalIgnoreCase))
-                        values.AllowDeprecatedCrs = ParseBooleanOrDefault(value, false);
+                        values.AllowDeprecatedCrs = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "CandidateIndex", StringComparison.OrdinalIgnoreCase))
                     {
-                        int candidateIndex = ParseIntOrDefault(value, 0);
-                        values.CandidateIndex = Math.Max(candidateIndex, 0);
+                        if (!int.TryParse(value, out int candidateIndex) || candidateIndex < 0)
+                            throw new ArgumentException($"CandidateIndex must be a non-negative integer (received '{value}').");
+                        values.CandidateIndex = candidateIndex;
                     }
                     else if (string.Equals(key, "EnableNetworkConnections", StringComparison.OrdinalIgnoreCase))
-                        values.EnableNetworkConnections = ParseBooleanOrDefault(value, ProjService.Default.EnableNetworkConnections);
+                        values.EnableNetworkConnections = ParseBooleanOption(value, key, ProjService.Default.EnableNetworkConnections);
                     else if (string.Equals(key, "EnableGridCache", StringComparison.OrdinalIgnoreCase))
-                        values.EnableGridCache = ParseBooleanOrDefault(value, ProjService.Default.EnableGridCache);
+                        values.EnableGridCache = ParseBooleanOption(value, key, ProjService.Default.EnableGridCache);
                     else if (string.Equals(key, "GridCacheSizeMb", StringComparison.OrdinalIgnoreCase))
-                        values.GridCacheSizeMb = ParseIntOrDefault(value, ProjService.Default.GridCacheSizeMb);
+                    {
+                        if (!int.TryParse(value, out int size) || size <= 0)
+                            throw new ArgumentException($"GridCacheSizeMb must be a positive integer (received '{value}').");
+                        values.GridCacheSizeMb = size;
+                    }
                     else if (string.Equals(key, "GridCacheTtlSeconds", StringComparison.OrdinalIgnoreCase))
-                        values.GridCacheTtlSeconds = ParseIntOrDefault(value, ProjService.Default.GridCacheTtlSeconds);
+                    {
+                        if (!int.TryParse(value, out int ttl) || ttl < 0)
+                            throw new ArgumentException($"GridCacheTtlSeconds must be a non-negative integer (received '{value}').");
+                        values.GridCacheTtlSeconds = ttl;
+                    }
                     else if (string.Equals(key, "EndpointUrl", StringComparison.OrdinalIgnoreCase))
                         values.EndpointUrl = string.IsNullOrWhiteSpace(value) ? null : value;
                     else if (string.Equals(key, "GridCachePath", StringComparison.OrdinalIgnoreCase))
@@ -172,9 +204,12 @@ namespace ProjExcel
                     else if (string.Equals(key, "LogLevel", StringComparison.OrdinalIgnoreCase))
                     {
                         ProjLogLevel logLevel;
-                        if (Enum.TryParse(value, true, out logLevel) && Enum.IsDefined(typeof(ProjLogLevel), logLevel))
-                            values.LogLevel = logLevel;
+                        if (!Enum.TryParse(value, true, out logLevel) || !Enum.IsDefined(typeof(ProjLogLevel), logLevel))
+                            throw new ArgumentException($"LogLevel must be a valid PROJ log level (received '{value}').");
+                        values.LogLevel = logLevel;
                     }
+                    else
+                        throw new ArgumentException($"Unknown transform option '{key}'.");
                 }
                 return values;
             }
@@ -211,75 +246,124 @@ namespace ProjExcel
             return options;
         }
 
-        internal static bool ParseBooleanOrDefault(object value, bool defaultValue)
+        //This routine may cause silent data entry errors,
+        //so I will not use it. Instead, I will use ParseBooleanOption() which throws an exception if the value is not a valid boolean.
+        //internal static bool ParseBooleanOrDefault(object value, bool defaultValue)
+        //{
+        //    if (value == null || value == DBNull.Value || value == Type.Missing)
+        //        return defaultValue;
+
+        //    if (value is bool)
+        //        return (bool)value;
+
+        //    if (value is byte)
+        //        return (byte)value != 0;
+
+        //    if (value is sbyte)
+        //        return (sbyte)value != 0;
+
+        //    if (value is short)
+        //        return (short)value != 0;
+
+        //    if (value is ushort)
+        //        return (ushort)value != 0;
+
+        //    if (value is int)
+        //        return (int)value != 0;
+
+        //    if (value is uint)
+        //        return (uint)value != 0;
+
+        //    if (value is long)
+        //        return (long)value != 0;
+
+        //    if (value is ulong)
+        //        return (ulong)value != 0;
+
+        //    if (value is float)
+        //        return Math.Abs((float)value) > 0f;
+
+        //    if (value is double)
+        //        return Math.Abs((double)value) > 0d;
+
+        //    if (value is decimal)
+        //        return ((decimal)value) != 0m;
+
+        //    string text = Convert.ToString(value);
+        //    if (string.IsNullOrWhiteSpace(text))
+        //        return defaultValue;
+
+        //    bool parsedBool;
+        //    if (bool.TryParse(text, out parsedBool))
+        //        return parsedBool;
+
+        //    text = text.Trim();
+        //    if (string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase) ||
+        //        string.Equals(text, "y", StringComparison.OrdinalIgnoreCase) ||
+        //        string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+        //    {
+        //        return true;
+        //    }
+
+        //    if (string.Equals(text, "no", StringComparison.OrdinalIgnoreCase) ||
+        //        string.Equals(text, "n", StringComparison.OrdinalIgnoreCase) ||
+        //        string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
+        //    {
+        //        return false;
+        //    }
+
+        //    double parsedNumber;
+        //    if (double.TryParse(text, out parsedNumber))
+        //        return parsedNumber != 0d;
+
+        //    return defaultValue;
+        //}
+
+        private static bool ParseBooleanOption(object value, string name, bool defaultValue)
         {
-            if (value == null || value == DBNull.Value || value == Type.Missing)
+            if (value == null || value == DBNull.Value || value == Type.Missing || value is ExcelMissing || value is ExcelEmpty)
                 return defaultValue;
 
-            if (value is bool)
-                return (bool)value;
+            if (value is bool boolean)
+                return boolean;
 
-            if (value is byte)
-                return (byte)value != 0;
-
-            if (value is sbyte)
-                return (sbyte)value != 0;
-
-            if (value is short)
-                return (short)value != 0;
-
-            if (value is ushort)
-                return (ushort)value != 0;
-
-            if (value is int)
-                return (int)value != 0;
-
-            if (value is uint)
-                return (uint)value != 0;
-
-            if (value is long)
-                return (long)value != 0;
-
-            if (value is ulong)
-                return (ulong)value != 0;
-
-            if (value is float)
-                return Math.Abs((float)value) > 0f;
-
-            if (value is double)
-                return Math.Abs((double)value) > 0d;
-
-            if (value is decimal)
-                return ((decimal)value) != 0m;
-
-            string text = Convert.ToString(value);
-            if (string.IsNullOrWhiteSpace(text))
-                return defaultValue;
-
-            bool parsedBool;
-            if (bool.TryParse(text, out parsedBool))
-                return parsedBool;
-
-            text = text.Trim();
-            if (string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "y", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+            if (value is string text)
             {
-                return true;
+                text = text.Trim();
+                if (bool.TryParse(text, out bool parsed))
+                    return parsed;
+                if (string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "y", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (string.Equals(text, "no", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "n", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (double.TryParse(text, out double number))
+                {
+                    if (number == 1d)
+                        return true;
+                    if (number == 0d)
+                        return false;
+                }
+            }
+            else if (value is IConvertible && !(value is ExcelError))
+            {
+                try
+                {
+                    double number = Convert.ToDouble(value);
+                    if (number == 1d)
+                        return true;
+                    if (number == 0d)
+                        return false;
+                }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+                {
+                }
             }
 
-            if (string.Equals(text, "no", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "n", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            double parsedNumber;
-            if (double.TryParse(text, out parsedNumber))
-                return parsedNumber != 0d;
-
-            return defaultValue;
+            throw new ArgumentException($"{name} must be TRUE or FALSE (1 or 0).");
         }
 
         internal static int ParseIntOrDefault(object value, int defaultValue)
@@ -410,7 +494,7 @@ namespace ProjExcel
             if (string.IsNullOrWhiteSpace(text))
                 return defaultValue;
 
-            string[] parts = text.Split(new[] { ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = text.Split(',');
             if (parts.Length != 4)
                 return defaultValue;
 
@@ -422,7 +506,14 @@ namespace ProjExcel
             if (double.TryParse(parts[0].Trim(), out westValue) &&
                 double.TryParse(parts[1].Trim(), out southValue) &&
                 double.TryParse(parts[2].Trim(), out eastValue) &&
-                double.TryParse(parts[3].Trim(), out northValue))
+                double.TryParse(parts[3].Trim(), out northValue) &&
+                !double.IsNaN(westValue) && !double.IsInfinity(westValue) &&
+                !double.IsNaN(southValue) && !double.IsInfinity(southValue) &&
+                !double.IsNaN(eastValue) && !double.IsInfinity(eastValue) &&
+                !double.IsNaN(northValue) && !double.IsInfinity(northValue) &&
+                westValue >= -180 && westValue <= 180 && eastValue >= -180 && eastValue <= 180 &&
+                southValue >= -90 && southValue <= 90 && northValue >= -90 && northValue <= 90 &&
+                southValue <= northValue)
             {
                 return new CoordinateArea(westValue, southValue, eastValue, northValue);
             }
@@ -486,12 +577,14 @@ namespace ProjExcel
             [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null
             )
         {
+            try
+            {
             var parts = new List<string>
             {
                 "CandidateIndex=" + Math.Max(ParseIntOrDefault(candidateIndex, 0), 0)
             };
 
-            if (ParseBooleanOrDefault(allowDeprecatedCrs, false))
+            if (ParseBooleanOption(allowDeprecatedCrs, "AllowDeprecatedCrs", false))
                 parts.Add("AllowDeprecatedCrs=True");
 
             string authorityValue = Convert.ToString(authority);
@@ -506,10 +599,10 @@ namespace ProjExcel
             if (!string.IsNullOrEmpty(areaValue))
                 parts.Add("Area=" + areaValue);
 
-            if (ParseBooleanOrDefault(bestOnly, false))
+            if (ParseBooleanOption(bestOnly, "BestOnly", false))
                 parts.Add("BestOnly=True");
 
-            if (ParseBooleanOrDefault(forceOver, false))
+            if (ParseBooleanOption(forceOver, "ForceOver", false))
                 parts.Add("ForceOver=True");
 
             if (!Optional.IsEmpty(intermediateCrsUsage) &&
@@ -526,22 +619,27 @@ namespace ProjExcel
             if (usage != "Auto")
                 parts.Add("IntermediateCrsUsage=" + usage);
 
-            if (ParseBooleanOrDefault(noBallparkConversions, false))
+            if (ParseBooleanOption(noBallparkConversions, "NoBallparkConversions", false))
                 parts.Add("NoBallparkConversions=True");
 
-            if (ParseBooleanOrDefault(noDiscardIfMissing, false))
+            if (ParseBooleanOption(noDiscardIfMissing, "NoDiscardIfMissing", false))
                 parts.Add("NoDiscardIfMissing=True");
 
-            if (ParseBooleanOrDefault(strictContains, false))
+            if (ParseBooleanOption(strictContains, "StrictContains", false))
                 parts.Add("StrictContains=True");
 
-            if (ParseBooleanOrDefault(usePrimaryGridNames, false))
+            if (ParseBooleanOption(usePrimaryGridNames, "UsePrimaryGridNames", false))
                 parts.Add("UsePrimaryGridNames=True");
 
-            if (ParseBooleanOrDefault(useSuperseded, false))
+            if (ParseBooleanOption(useSuperseded, "UseSuperseded", false))
                 parts.Add("UseSuperseded=True");
 
             return string.Join("; ", parts);
+            }
+            catch (ArgumentException ex)
+            {
+                return "#ERR: " + ex.Message;
+            }
         }
 
         [ExcelFunction(Name = "PE.trf.OptionsEx", Description = "Adds PROJ context settings to a transform options token")]
@@ -556,6 +654,8 @@ namespace ProjExcel
             [ExcelArgument(Name = "LogLevel", Description = "PROJ log level: None, Error (default), Debug, and Trace)")] object logLevel = null
             )
         {
+            try
+            {
             object raw = transformOptions;
             if (raw is object[,] matrix)
             {
@@ -573,19 +673,20 @@ namespace ProjExcel
             else
                 return "#ERR: transformOptions must contain a token from PE.trf.Options().";
 
+            CoordinateTransformOptionsInput.Parse(token);
             var parts = new List<string> { token };
             ProjService defaults = ProjService.Default;
 
-            if (!Optional.IsEmpty(enableNetworkConnections))
+            if (!Optional.IsMissing(enableNetworkConnections))
             {
-                bool enabled = ParseBooleanOrDefault(enableNetworkConnections, defaults.EnableNetworkConnections);
+                bool enabled = ParseBooleanOption(enableNetworkConnections, "EnableNetworkConnections", defaults.EnableNetworkConnections);
                 if (enabled != defaults.EnableNetworkConnections)
                     parts.Add("EnableNetworkConnections=" + enabled);
             }
 
-            if (!Optional.IsEmpty(enableGridCache))
+            if (!Optional.IsMissing(enableGridCache))
             {
-                bool enabled = ParseBooleanOrDefault(enableGridCache, defaults.EnableGridCache);
+                bool enabled = ParseBooleanOption(enableGridCache, "EnableGridCache", defaults.EnableGridCache);
                 if (enabled != defaults.EnableGridCache)
                     parts.Add("EnableGridCache=" + enabled);
             }
@@ -645,6 +746,11 @@ namespace ProjExcel
             }
 
             return string.Join("; ", parts);
+            }
+            catch (ArgumentException ex)
+            {
+                return "#ERR: " + ex.Message;
+            }
         }
     }
 }

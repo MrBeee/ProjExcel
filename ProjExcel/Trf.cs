@@ -35,14 +35,7 @@ namespace ProjExcel
             if (dst.IsDeprecated && !optionValues.AllowDeprecatedCrs)
                 throw new ArgumentException("Target CRS is deprecated and AllowDeprecatedCrs option is not set.");
 
-            try
-            {
-                return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
-            }
-            catch (Exception ex) when ((ex is ProjException || ex is ArgumentNullException) && coordinateTransformOptions.BestOnly)
-            {
-                throw new ArgumentException("BestOnly=TRUE is invalid for the chosen transform.", ex);
-            }
+            return CoordinateTransform.Create(src, dst, coordinateTransformOptions, pc);
         }
 
         internal static bool isWktString(string s)
@@ -65,8 +58,7 @@ namespace ProjExcel
 
                 if (transform is double)
                 {
-                    // First cast to double, then to int, to deal with Excel datatypes
-                    nTransform = (int)(double)transform;
+                    nTransform = Crs.ParseNumericEpsgCode((double)transform);
 
                     // we just have an EPSG number from a single input parameter:
                     return CoordinateTransform.CreateFromEpsg(nTransform, pc);
@@ -464,13 +456,13 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool bTranspose = Optional.Check(transpose, false);
-            int outputFormat = ParseOutputFormatString(outputString);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool bTranspose = Optional.Check(transpose, false);
+                int outputFormat = ParseOutputFormatString(outputString);
+
                 using (var pc = ProjService.Default.CreateContext(optionValues))
 
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))

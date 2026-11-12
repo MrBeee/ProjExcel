@@ -48,6 +48,8 @@ namespace ProjExcel
         {
             if (oCrs is object[,] range)
             {
+                // the single cell oCrs may contain a range object returned from another Excel function,
+                // but it must be a single cell range (1x1) to be valid for CRS creation.
                 if (range.GetLength(0) != 1 || range.GetLength(1) != 1)
                     throw new ArgumentException("CRS must be a single cell (for example, EPSG:1234).");
 
@@ -56,6 +58,15 @@ namespace ProjExcel
 
             return CreateCrsFromSingleCell(oCrs, pjContext);
         } // CreateCrs
+
+        internal static int ParseNumericEpsgCode(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value) ||
+                value != Math.Truncate(value) || value < int.MinValue || value > int.MaxValue)
+                throw new ArgumentException("Numeric EPSG code must be a finite integer within the Int32 range.");
+
+            return (int)value;
+        }
 
         private static CoordinateReferenceSystem CreateCrsFromSingleCell(object value, ProjContext pjContext)
         {
@@ -67,7 +78,7 @@ namespace ProjExcel
 
             if (value is double)
             {
-                nCrs = (int)(double)value;
+                nCrs = ParseNumericEpsgCode((double)value);
                 return CoordinateReferenceSystem.CreateFromEpsg(nCrs, pjContext);
             }
             else if (value is int)
