@@ -26,6 +26,7 @@
 - For PE.crs property-name lists, keep entries in alphabetical order rather than appending to preserve numeric indices; numeric property access is rarely used.
 - Do not implement the speculative PE.crs.SysCode, DatumCode, BaseCRScode, ProjnConvCode, Cmpd.HorCRS, Cmpd.VertCRS, InformationSource, DataSource, RevisionDate, ChangeID, or ShowCrs UDF proposals without a concrete SharpProj-backed use case; favor the existing curated CRS API.
 - PE.lst.CoordinateReferenceSystemList should expose an AllowDeprecated Excel input argument, defaulting to true so deprecated CRS records are shown unless disabled.
+- When CRS UDFs use scalar object inputs, retain a centralized check accepting 1×1 object[,] values (e.g. returned from another function) and rejecting multi-cell ranges; a CRS still represents exactly one cell.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.

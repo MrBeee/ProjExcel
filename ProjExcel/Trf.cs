@@ -141,8 +141,10 @@ namespace ProjExcel
             if (Optional.IsEmpty(targetCrs))
                 return CreateTransformFromDescription(sourceCrs, optionValues, coordinateTransformOptions, pc);
 
-            using (var src = Crs.CreateNormalizedCrs(sourceCrs, pc))
-            using (var dst = Crs.CreateNormalizedCrs(targetCrs, pc))
+            using (var source = Crs.CreateCrs(sourceCrs, pc))
+            using (var src = source.WithNormalizedAxis(pc))
+            using (var target = Crs.CreateCrs(targetCrs, pc))
+            using (var dst = target.WithNormalizedAxis(pc))
             {
                 return CreateTransformWithOptions(src, dst, optionValues, coordinateTransformOptions, pc);
             }
@@ -271,27 +273,34 @@ namespace ProjExcel
             [ExcelArgument(Name = "transformOptions", Description = "Optional token from PE.trf.OptionsEx() (blank = defaults)")] object options = null,
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null)
         {
-            if (options is ExcelError)
-                return "#ERR: Invalid transformOptions value.";
-
-            if (options is string token && token.StartsWith("#ERR:", StringComparison.OrdinalIgnoreCase))
-                return token;
-
-            TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            ProjService defaults = ProjService.Default;
-
-            object[,] result = new object[,]
+            try
             {
-                { "Setting", "Value" },
-                { "EnableNetworkConnections", values.EnableNetworkConnections ?? defaults.EnableNetworkConnections },
-                { "EnableGridCache", values.EnableGridCache ?? defaults.EnableGridCache },
-                { "GridCacheSizeMb", values.GridCacheSizeMb ?? defaults.GridCacheSizeMb },
-                { "GridCacheTtlSeconds", values.GridCacheTtlSeconds ?? defaults.GridCacheTtlSeconds },
-                { "EndpointUrl", values.EndpointUrl ?? defaults.EndpointUrl },
-                { "GridCachePath", values.GridCachePath ?? defaults.GridCachePath },
-                { "LogLevel", (values.LogLevel ?? defaults.LogLevel).ToString() }
-            };
-            return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
+                if (options is ExcelError)
+                    return "#ERR: Invalid transformOptions value.";
+
+                if (options is string token && token.StartsWith("#ERR:", StringComparison.OrdinalIgnoreCase))
+                    return token;
+
+                TransformOptions.CoordinateTransformOptionsInput values = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                ProjService defaults = ProjService.Default;
+
+                object[,] result = new object[,]
+                {
+                    { "Setting", "Value" },
+                    { "EnableNetworkConnections", values.EnableNetworkConnections ?? defaults.EnableNetworkConnections },
+                    { "EnableGridCache", values.EnableGridCache ?? defaults.EnableGridCache },
+                    { "GridCacheSizeMb", values.GridCacheSizeMb ?? defaults.GridCacheSizeMb },
+                    { "GridCacheTtlSeconds", values.GridCacheTtlSeconds ?? defaults.GridCacheTtlSeconds },
+                    { "EndpointUrl", values.EndpointUrl ?? defaults.EndpointUrl },
+                    { "GridCachePath", values.GridCachePath ?? defaults.GridCachePath },
+                    { "LogLevel", (values.LogLevel ?? defaults.LogLevel).ToString() }
+                };
+                return Optional.Check(transpose, false) ? TransposeObjectArray(result) : result;
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
         }
 
         [ExcelFunction(Name = "PE.trf.Properties", Description = "Show transform properties selected by index or name in a row")]
@@ -303,11 +312,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 bool multipleProperties = properties is string names && names.Contains(",");
                 int[] propertyIndices = multipleProperties
                     ? ((string)properties).Split(',').Select(name => ParseTransformPropertyIndex(name.Trim())).ToArray()
@@ -355,11 +363,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -395,11 +402,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 string[] propertyNames = { "Name", "WestLongitude", "SouthLatitude", "EastLongitude", "NorthLatitude", "CenterX", "CenterY" };
                 if (Optional.IsEmpty(properties))
                     return "#ERR: Property is required.";
@@ -503,12 +509,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (\"Proj\")")] object stringFormat
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-
-            int outputFormat = ParseOutputFormatString(stringFormat);   
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                int outputFormat = ParseOutputFormatString(stringFormat);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
@@ -549,11 +553,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -624,11 +627,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -653,13 +655,12 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description= "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            int outputFormat = ParseOutputFormatString(outputString);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool bTranspose = Optional.Check(transpose, false);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                int outputFormat = ParseOutputFormatString(outputString);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool bTranspose = Optional.Check(transpose, false);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -684,12 +685,11 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool bTranspose = Optional.Check(transpose, false);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool bTranspose = Optional.Check(transpose, false);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -735,10 +735,9 @@ namespace ProjExcel
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -764,13 +763,12 @@ namespace ProjExcel
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            int stepNumber = Optional.Check(oStepNumber, 0);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool multipleProperties = properties is string names && names.Contains(",");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                int stepNumber = Optional.Check(oStepNumber, 0);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool multipleProperties = properties is string names && names.Contains(",");
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -823,11 +821,10 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
                 int stepNumber = Optional.Check(oStepNumber, 0);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
@@ -857,12 +854,11 @@ namespace ProjExcel
             [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool bTranspose = Optional.Check(transpose, false);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool bTranspose = Optional.Check(transpose, false);
                 string[] selectedProperties = Optional.IsEmpty(properties)
                     ? GridPropertyNames
                     : Convert.ToString(properties).Split(',').Select(name => name.Trim()).ToArray();
@@ -912,13 +908,12 @@ namespace ProjExcel
             [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-            int gridNumber = Optional.Check(oGridNumber, 0);
-            string nullValueText = Optional.Check(nullValues, "<null>");
-            bool multipleProperties = properties is string names && names.Contains(",");
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                int gridNumber = Optional.Check(oGridNumber, 0);
+                string nullValueText = Optional.Check(nullValues, "<null>");
+                bool multipleProperties = properties is string names && names.Contains(",");
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                 {
@@ -1304,12 +1299,47 @@ namespace ProjExcel
             return ApplyCore(SourceCrs, TargetCrs, x, y, options, true);
         }
 
-        private static object ApplyCore(object SourceCrs, object TargetCrs, object[,] x, object[,] y, object options, bool reversed)
+        private static double ParseCoordinate(object value, int row, string coordinate)
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-
+            double number;
             try
             {
+                number = Convert.ToDouble(value);
+            }
+            catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+            {
+                throw new ArgumentException($"Input {coordinate} at row {row + 1} must be a finite number.", ex);
+            }
+
+            if (double.IsNaN(number) || double.IsInfinity(number))
+                throw new ArgumentException($"Input {coordinate} at row {row + 1} must be a finite number.");
+
+            return number;
+        }
+
+        private static PPoint ApplyPoint(CoordinateTransform transform, PPoint point, bool reversed, int row, int candidateIndex)
+        {
+            try
+            {
+                return reversed ? transform.ApplyReversed(point) : transform.Apply(point);
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException($"Transform candidate {candidateIndex} failed at row {row + 1}: {ex.Message}", ex);
+            }
+        }
+
+        private static void ValidateOutputCoordinate(double value, int row, int candidateIndex, string coordinate)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                throw new ArgumentException($"Transform candidate {candidateIndex} produced a non-finite {coordinate} coordinate at row {row + 1}.");
+        }
+
+        private static object ApplyCore(object SourceCrs, object TargetCrs, object[,] x, object[,] y, object options, bool reversed)
+        {
+            try
+            {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
@@ -1343,17 +1373,12 @@ namespace ProjExcel
                                 continue;
                             }
 
-                            double sx = Convert.ToDouble(xValue);
-                            double sy = Convert.ToDouble(yValue);
+                            double sx = ParseCoordinate(xValue, row, "X");
+                            double sy = ParseCoordinate(yValue, row, "Y");
 
-                            var pnt = new PPoint(sx, sy);
-                            if (reversed)
-                                pnt = selectedTransform.ApplyReversed(pnt);
-                            else
-                                pnt = selectedTransform.Apply(pnt);
-                            if (double.IsNaN(pnt.X) || double.IsInfinity(pnt.X) ||
-                                double.IsNaN(pnt.Y) || double.IsInfinity(pnt.Y))
-                                return $"#ERR: Transform produced a non-finite coordinate at row {row + 1}.";
+                            var pnt = ApplyPoint(selectedTransform, new PPoint(sx, sy), reversed, row, optionValues.CandidateIndex);
+                            ValidateOutputCoordinate(pnt.X, row, optionValues.CandidateIndex, "X");
+                            ValidateOutputCoordinate(pnt.Y, row, optionValues.CandidateIndex, "Y");
 
                             result[row, 0] = pnt.X;
                             result[row, 1] = pnt.Y;
@@ -1394,10 +1419,9 @@ namespace ProjExcel
 
         private static object ApplyExCore(object SourceCrs, object TargetCrs, object[,] xyzt, object options, bool reversed)
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
                 using (
                     
                     
@@ -1440,17 +1464,12 @@ namespace ProjExcel
                                             continue;
                                         }
 
-                                        double sx = Convert.ToDouble(xValue);
-                                        double sy = Convert.ToDouble(yValue);
+                                         double sx = ParseCoordinate(xValue, row, "X");
+                                         double sy = ParseCoordinate(yValue, row, "Y");
 
-                                        var pnt = new PPoint(sx, sy);
-                                        if (reversed)
-                                            pnt = selectedTransform.ApplyReversed(pnt);
-                                        else
-                                            pnt = selectedTransform.Apply(pnt);
-                                        if (double.IsNaN(pnt.X) || double.IsInfinity(pnt.X) ||
-                                            double.IsNaN(pnt.Y) || double.IsInfinity(pnt.Y))
-                                            return $"#ERR: Transform produced a non-finite coordinate at row {row + 1}.";
+                                         var pnt = ApplyPoint(selectedTransform, new PPoint(sx, sy), reversed, row, optionValues.CandidateIndex);
+                                         ValidateOutputCoordinate(pnt.X, row, optionValues.CandidateIndex, "X");
+                                         ValidateOutputCoordinate(pnt.Y, row, optionValues.CandidateIndex, "Y");
 
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
@@ -1473,19 +1492,14 @@ namespace ProjExcel
                                             continue;
                                         }
 
-                                        double sx = Convert.ToDouble(xValue);
-                                        double sy = Convert.ToDouble(yValue);
-                                        double sz = Convert.ToDouble(zValue);
+                                         double sx = ParseCoordinate(xValue, row, "X");
+                                         double sy = ParseCoordinate(yValue, row, "Y");
+                                         double sz = ParseCoordinate(zValue, row, "Z");
 
-                                        var pnt = new PPoint(sx, sy, sz);
-                                        if (reversed)
-                                            pnt = selectedTransform.ApplyReversed(pnt);
-                                        else
-                                            pnt = selectedTransform.Apply(pnt);
-                                        if (double.IsNaN(pnt.X) || double.IsInfinity(pnt.X) ||
-                                            double.IsNaN(pnt.Y) || double.IsInfinity(pnt.Y) ||
-                                            double.IsNaN(pnt.Z) || double.IsInfinity(pnt.Z))
-                                            return $"#ERR: Transform produced a non-finite coordinate at row {row + 1}.";
+                                         var pnt = ApplyPoint(selectedTransform, new PPoint(sx, sy, sz), reversed, row, optionValues.CandidateIndex);
+                                         ValidateOutputCoordinate(pnt.X, row, optionValues.CandidateIndex, "X");
+                                         ValidateOutputCoordinate(pnt.Y, row, optionValues.CandidateIndex, "Y");
+                                         ValidateOutputCoordinate(pnt.Z, row, optionValues.CandidateIndex, "Z");
 
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
@@ -1511,21 +1525,16 @@ namespace ProjExcel
                                             continue;
                                         }
 
-                                        double sx = Convert.ToDouble(xValue);
-                                        double sy = Convert.ToDouble(yValue);
-                                        double sz = Convert.ToDouble(zValue);
-                                        double st = Convert.ToDouble(tValue);
+                                         double sx = ParseCoordinate(xValue, row, "X");
+                                         double sy = ParseCoordinate(yValue, row, "Y");
+                                         double sz = ParseCoordinate(zValue, row, "Z");
+                                         double st = ParseCoordinate(tValue, row, "T");
 
-                                        var pnt = new PPoint(sx, sy, sz, st);
-                                        if (reversed)
-                                            pnt = selectedTransform.ApplyReversed(pnt);
-                                        else
-                                            pnt = selectedTransform.Apply(pnt);
-                                        if (double.IsNaN(pnt.X) || double.IsInfinity(pnt.X) ||
-                                            double.IsNaN(pnt.Y) || double.IsInfinity(pnt.Y) ||
-                                            double.IsNaN(pnt.Z) || double.IsInfinity(pnt.Z) ||
-                                            double.IsNaN(pnt.T) || double.IsInfinity(pnt.T))
-                                            return $"#ERR: Transform produced a non-finite coordinate at row {row + 1}.";
+                                         var pnt = ApplyPoint(selectedTransform, new PPoint(sx, sy, sz, st), reversed, row, optionValues.CandidateIndex);
+                                         ValidateOutputCoordinate(pnt.X, row, optionValues.CandidateIndex, "X");
+                                         ValidateOutputCoordinate(pnt.Y, row, optionValues.CandidateIndex, "Y");
+                                         ValidateOutputCoordinate(pnt.Z, row, optionValues.CandidateIndex, "Z");
+                                         ValidateOutputCoordinate(pnt.T, row, optionValues.CandidateIndex, "T");
 
                                         result[row, 0] = pnt.X;
                                         result[row, 1] = pnt.Y;
@@ -1545,25 +1554,35 @@ namespace ProjExcel
             }
         }
 
-        [ExcelFunction(Name = "PE.trf.Roundtrip", Description = "Get the cumulative error of N transform roundtrips, starting forward", IsExceptionSafe = false)]
+        [ExcelFunction(Name = "PE.trf.Roundtrip", Description = "Get the cumulative error of N transform roundtrips", IsExceptionSafe = false)]
         public static object Roundtrip(
             [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
-            [ExcelArgument(Name = "testPoint", Description = "(x, y, [z]) test point with adjacentcoordinates")] object[,] testPoint,
+            [ExcelArgument(Name = "testPoint", Description = "One row with adjacent X, Y, [Z] coordinates")] object[,] testPoint,
             [ExcelArgument(Name = "nrRoundtrips", Description = "Nr of roundtrips to make, Default = 1")] object oRoundTrips,
-            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "forward", Description = "Start roundtrips in the forward direction (TRUE)")] object forward = null
             )
         {
-            TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-
-            // Check specific input data
-            int nTrips = (int)Optional.Check(oRoundTrips, 1.0);
-            // max three adjacent [x, y, z] cells on the same row
-            int cols = testPoint.GetLength(1);
-            if (testPoint.GetLength(0) > 1 || cols > 3) return "#ERR: need one test point, containing up to three coordinates";
-
             try
             {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                bool startForward = Optional.Check(forward, true);
+                double requestedTrips = Optional.Check(oRoundTrips, 1.0);
+                if (double.IsNaN(requestedTrips) || double.IsInfinity(requestedTrips) ||
+                    requestedTrips < 1 || requestedTrips > int.MaxValue || requestedTrips != Math.Truncate(requestedTrips))
+                    return "#ERR: nrRoundtrips must be a positive whole number.";
+
+                int nTrips = (int)requestedTrips;
+                if (testPoint == null || testPoint.GetLength(0) != 1 ||
+                    (testPoint.GetLength(1) != 2 && testPoint.GetLength(1) != 3))
+                    return "#ERR: testPoint must contain one row with X, Y, and optionally Z.";
+
+                double x = ParseCoordinate(testPoint[0, 0], 0, "X");
+                double y = ParseCoordinate(testPoint[0, 1], 0, "Y");
+                bool hasZ = testPoint.GetLength(1) == 3;
+                double z = hasZ ? ParseCoordinate(testPoint[0, 2], 0, "Z") : 0.0;
+
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
@@ -1571,15 +1590,19 @@ namespace ProjExcel
                         CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
                         ValidateTransformForExecution(selectedTransform, optionValues.CandidateIndex);
 
-                        double x = testPoint.GetLength(1) > 0 ? (double)testPoint[0, 0] : 0.0;
-                        double y = testPoint.GetLength(1) > 1 ? (double)testPoint[0, 1] : 0.0;
-                        double z = testPoint.GetLength(1) > 2 ? (double)testPoint[0, 2] : 0.0;
-                        PPoint pt = new PPoint(x, y, z);
+                        PPoint pt = hasZ ? new PPoint(x, y, z) : new PPoint(x, y);
+                        double error;
+                        try
+                        {
+                            error = selectedTransform.RoundTrip(startForward, nTrips, pt);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new ArgumentException($"Transform candidate {optionValues.CandidateIndex} failed during roundtrip: {ex.Message}", ex);
+                        }
 
-                        double error = selectedTransform.RoundTrip(true, nTrips, pt);
-
-                        if (Double.IsInfinity(error))
-                            return "#ERR: Infinite roundtrip error";
+                        if (double.IsNaN(error) || double.IsInfinity(error))
+                            return $"#ERR: Transform candidate {optionValues.CandidateIndex} produced a non-finite roundtrip error.";
 
                         return error;
                     }

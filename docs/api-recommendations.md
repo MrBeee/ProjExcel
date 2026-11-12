@@ -2,14 +2,13 @@
 
 ## API maturity against SharpProj
 
-ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs; obsolete `PE.xfm.*` functions are not part of the API and are excluded. It is not an exhaustive audit of every SharpProj member. The priority table lists only gaps requiring attention; implemented behavior and design constraints are not action items.
+ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs; obsolete `PE.xfm.*` functions are not part of the API and are excluded. It is not an exhaustive audit of every SharpProj member. The priority table lists only gaps requiring attention; implemented behavior and design constraints are not action items. Transform option parsing is handled inside UDF error boundaries; `Apply*` and `Apply*Ex` report row/candidate/coordinate failures, and `Roundtrip` validates its point, count, direction, and result. Compiled CRS and transform UDFs now take scalar CRS arguments; the shared parser also accepts a 1×1 array and rejects multi-cell CRS ranges.
 
 | Priority | Area | Gap requiring attention | Recommended action |
 | --- | --- | --- | --- |
-| P1 | Unavailable operations and error reporting | Execution UDFs already check candidate and grid availability before applying a transform, but non-finite output checks remain generic and supported UDFs do not handle errors consistently. | Improve diagnostics for failures not explained by availability checks and align error handling across `PE.crs.*` and `PE.trf.*`. |
-| P2 | CRS input consistency | `PE.crs.*` now requires a 1×1 CRS range; `PE.trf.*` takes a scalar CRS value. Both support single-value CRS descriptions, but their Excel input shapes still differ. | Align input shapes where practical without reintroducing two-cell authority/code inputs or breaking supported scalar values. |
+| P1 | Targeted failure-diagnostic cases | `Apply` and `ApplyEx` are widely exercised in workbooks. The newer input and failure messages, and `Roundtrip`'s direction flag, merit focused checks rather than a new general transform test suite. | Use `docs/API_ProjExcel.xlsx` for targeted cases such as invalid options or coordinates, unavailable grids, and forward/reverse roundtrips; retain the existing `ExcelTests` workbooks for SharpProj-parity checks. |
 
-Explicit candidate selection, 2D/3D/4D input handling, transform metadata access, and an error when `BestOnly` cannot be honored already exist; they are not outstanding priorities. The actions above focus on diagnosing failed operations and aligning CRS inputs rather than mirroring every SharpProj member. The nine workbooks in `ExcelTests` were audited before the legacy CRS UDFs were excluded; workbooks outside that folder were not covered.
+Explicit candidate selection, 2D/3D/4D input handling, transform metadata access, and an error when `BestOnly` cannot be honored already exist; they are not outstanding priorities. Preserve single-value CRS inputs and the existing transform-description path; do not add two-cell authority/code inputs. `docs/API_ProjExcel.xlsx` is the intended API test workbook for all API groups (deg/lst/trf/...), while `ExcelTests` contains spreadsheets intended to mimic, as far as practical, tests in `D:\GitHub\SharpProj\src\SharpProj.Tests`. `Apply` and `ApplyEx` are already widely used; focus any additional tests on specific new behaviors rather than duplicating established functional coverage. The nine `ExcelTests` workbooks were previously audited for legacy CRS UDF usage before those UDFs were excluded; that audit did not include workbooks outside `ExcelTests`.
 
 ## Transform parameters
 
@@ -32,7 +31,7 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 
 ## Broader API alignment
 
-- Single-cell CRS inputs including `AUTHORITY:CODE` strings are supported; `PE.crs.*` rejects multi-cell CRS ranges. Preserve existing scalar inputs when aligning `PE.crs.*` and `PE.trf.*`.
+- Single-value CRS inputs including `AUTHORITY:CODE` strings are supported across compiled `PE.crs.*` and `PE.trf.*` UDFs; the shared parser accepts 1×1 arrays and rejects multi-cell CRS ranges.
 - Order arguments CRS inputs → task inputs → transform options → optional presentation settings. Keep `PE.trf.Apply(source, target, x, y, options)`.
 - Use explicit stable scalar and identifier mappings instead of reflection or object serialization; retain discoverable task-oriented UDFs rather than mirroring every CRS or SharpProj member.
 - Preserve pre-execution candidate/grid availability diagnostics and improve remaining failure diagnostics; the non-finite result checks in `ApplyCore` and `ApplyExCore` are safeguards, not explanations.

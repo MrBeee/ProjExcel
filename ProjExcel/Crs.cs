@@ -44,17 +44,17 @@ namespace ProjExcel
         // The next routine allows for wider input than just epsg integer values; It returns a CoordinateReferenceSystem from various input types
         // It is also used to normalize the input CRS or transform specification into a CoordinateReferenceSystem object.
         // It has implemented all above Creation methods, apart from the stringlist variant: (string[] from).
-        internal static CoordinateReferenceSystem CreateNormalizedCrs(in object oCrs, ProjContext pc)
+        internal static CoordinateReferenceSystem CreateCrs(in object oCrs, in ProjContext pjContext)
         {
-            return CreateCrsFromSingleCell(oCrs, pc).WithNormalizedAxis(pc);
-        }
+            if (oCrs is object[,] range)
+            {
+                if (range.GetLength(0) != 1 || range.GetLength(1) != 1)
+                    throw new ArgumentException("CRS must be a single cell (for example, EPSG:1234).");
 
-        internal static CoordinateReferenceSystem CreateCrs(in object[,] oCrs, in ProjContext pjContext)
-        {
-            if (oCrs == null || oCrs.GetLength(0) != 1 || oCrs.GetLength(1) != 1)
-                throw new ArgumentException("CRS must be a single cell (for example, EPSG:1234).");
+                return CreateCrsFromSingleCell(range[0, 0], pjContext);
+            }
 
-            return CreateCrsFromSingleCell(oCrs[0, 0], pjContext);
+            return CreateCrsFromSingleCell(oCrs, pjContext);
         } // CreateCrs
 
         private static CoordinateReferenceSystem CreateCrsFromSingleCell(object value, ProjContext pjContext)
@@ -78,6 +78,8 @@ namespace ProjExcel
             else if (value is string)
             {
                 sCrs = (string)value;
+                if (string.IsNullOrWhiteSpace(sCrs))
+                    throw new ArgumentException("CRS specification is empty.");
 
                 bool success = int.TryParse(sCrs, out nCrs);
                 if (success)
@@ -103,7 +105,7 @@ namespace ProjExcel
                 return CoordinateReferenceSystem.Create(sCrs, pjContext);
             }
 
-            throw new ArgumentException("CRS");
+            throw new ArgumentException("CRS specification must be an EPSG code, AUTHORITY:CODE, WKT, JSON or PROJ string.");
         } // CreateCrsFromSingleCell
 
         private static bool IsWellKnownText(string sCrs)
@@ -254,7 +256,7 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.crs.Properties", Description = "Show CRS scalar properties selected by name or index in adjacent cells")]
         public static object Properties(
-            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object[,] oCrs,
+            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "properties", Description = "Comma-separated property names or indices; see PE.crs.ListCrsProperties()")] object properties,
             [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null,
             [ExcelArgument(Name = "nullValues", Description = "Replacement for missing values (<null>)")] object nullValues = null)
@@ -300,7 +302,7 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.crs.AxisProperties", Description = "Show properties of one CRS axis in adjacent cells")]
         public static object AxisProperties(
-            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object[,] oCrs,
+            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "axisIndex", Description = "Zero-based axis index")] object axisIndex,
             [ExcelArgument(Name = "properties", Description = "Comma-separated names or indices; see PE.crs.ListAxisProperties()")] object properties,
             [ExcelArgument(Name = "coordinateSystemAxis", Description = "Read CoordinateSystem.Axis instead of Axis (FALSE)")] object coordinateSystemAxis = null,
@@ -373,7 +375,7 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.crs.IdentifierProperties", Description = "Show properties of one CRS identifier in adjacent cells")]
         public static object IdentifierProperties(
-            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object[,] oCrs,
+            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "identifierIndex", Description = "Zero-based identifier index")] object identifierIndex,
             [ExcelArgument(Name = "properties", Description = "Comma-separated names or indices; see PE.crs.ListIdentifierProperties()")] object properties,
             [ExcelArgument(Name = "nullValues", Description = "Replacement for missing values (<null>)")] object nullValues = null)
@@ -428,7 +430,7 @@ namespace ProjExcel
 
         [ExcelFunction(Name = "PE.crs.ToString", Description = "Create a PROJ, WKT or JSON string representation of a CRS")]
         public static object ToString(
-            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string")] object[,] oCrs,
+            [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (Proj)")] object stringFormat,
             [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null)
         {
@@ -469,7 +471,7 @@ namespace ProjExcel
             Description = "Gets Euclidean area defined by 3 or more points in a Projected or Engineering CRS, ignoring elevation differences"
             )]
         public static object EuclideanArea(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Vertical list of points", Name = "PointList")] object[,] Points,
             [ExcelArgument("Normalize area to [m2] (true)", Name = "Normalized")] object normalized
             )
@@ -557,7 +559,7 @@ namespace ProjExcel
             Description = "Gets Euclidean distance between two points (or between multiple points in a poly-line), defined in a Projected or Engineering CRS, ignoring elevation differences"
             )]
         public static object EuclideanDistance(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Start point (or vertical list) of x,y points)", Name = "startPointOrPointList")] object[,] Point1,
             [ExcelArgument("End point (ignored when using list of points)", Name = "endPointOrNul")] object[,] Point2,
             [ExcelArgument("Normalize distance to [m] (true)", Name = "Normalized")] object normalized
@@ -651,7 +653,7 @@ namespace ProjExcel
             Description = "Gets Euclidean distance between two points (or between multiple points in a poly-line), defined in a Projected or Engineering CRS, honoring elevation differences"
             )]
         public static object EuclideanDistanceZ(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Start point (or vertical list) of x,y,z points)", Name = "startPointOrPointList")] object[,] Point1,
             [ExcelArgument("End point (ignored when using list of points)", Name = "endPointOrNul")] object[,] Point2,
             [ExcelArgument("Normalize distance to [m] (true)", Name = "Normalized")] object normalized
@@ -772,7 +774,7 @@ namespace ProjExcel
             Description = "Gets surface area defined by multiple (at least 3) points in a polygon defined in a Coordinate Reference System"
             )]
         public static object GeodesicArea(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Vertical list of points in a polygon)", Name = "startPointOrPointList")] object[,] Points,
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
@@ -839,7 +841,7 @@ namespace ProjExcel
             Description = "Gets geodesic distance between two points (or between multiple points in a poly-line), defined in a Coordinate Reference System, ignoring elevation differences"
             )]
         public static object GeodesicDistance(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Start point (or vertical list of points)", Name = "startPointOrPointList")] object[,] Point1,
             [ExcelArgument("End point (ignored when using list of points)", Name = "endPointOrNul")] object[,] Point2,
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
@@ -936,7 +938,7 @@ namespace ProjExcel
             Description = "Gets geodesic distance between two points (or between multiple points in a poly-line), defined in a Coordinate Reference System, honoring elevation differences"
             )]
         public static object GeodesicDistanceZ(
-            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object[,] oCrs,
+            [ExcelArgument("Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string", Name = "Crs")] object oCrs,
             [ExcelArgument("Start point (or vertical list) of x,y,z points)", Name = "startPointOrPointList")] object[,] Point1,
             [ExcelArgument("End point (ignored when using list of points)", Name = "endPointOrNul")] object[,] Point2,
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
@@ -1033,8 +1035,8 @@ namespace ProjExcel
             Description = "Confirms whether two different CRSs are equivalent"
             )]
         public static object IsEquivalentTo(
-            [ExcelArgument("CRS-1, consisting of one [or two adjacent] cell[s] with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs1")] object[,] oCrs1,
-            [ExcelArgument("CRS-2, consisting of one [or two adjacent] cell[s] with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs2")] object[,] oCrs2,
+            [ExcelArgument("CRS-1, string with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs1")] object oCrs1,
+            [ExcelArgument("CRS-2, string with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs2")] object oCrs2,
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
         {
@@ -1066,8 +1068,8 @@ namespace ProjExcel
             Description = "Confirms whether two different CRSs are equivalent with the axes in any order"
             )]
         public static object IsEquivalentToRelaxed(
-            [ExcelArgument("CRS-1, consisting of one [or two adjacent] cell[s] with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs1")] object[,] oCrs1,
-            [ExcelArgument("CRS-2, consisting of one [or two adjacent] cell[s] with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs2")] object[,] oCrs2,
+            [ExcelArgument("CRS-1, string with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs1")] object oCrs1,
+            [ExcelArgument("CRS-2, string with [Authority and] EPSG code, WKT string, JSON string or PROJ string", Name = "Crs2")] object oCrs2,
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
         {
