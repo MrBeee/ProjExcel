@@ -25,6 +25,7 @@
 - When adding a curated List/Properties API for PE.crs, do not remove any existing CRS routines; preserve workbook compatibility. After checking and updating spreadsheet usage, remove legacy PE.crs scalar/axis/identifier UDFs superseded by curated Properties accessors as soon as workbook compatibility is confirmed; do not remove before the audit.
 - For PE.crs property-name lists, keep entries in alphabetical order rather than appending to preserve numeric indices; numeric property access is rarely used.
 - Do not implement the speculative PE.crs.SysCode, DatumCode, BaseCRScode, ProjnConvCode, Cmpd.HorCRS, Cmpd.VertCRS, InformationSource, DataSource, RevisionDate, ChangeID, or ShowCrs UDF proposals without a concrete SharpProj-backed use case; favor the existing curated CRS API.
+- PE.lst.CoordinateReferenceSystemList should expose an AllowDeprecated Excel input argument, defaulting to true so deprecated CRS records are shown unless disabled.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.

@@ -300,8 +300,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
-            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
@@ -762,8 +761,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "step number", Description = "Step nr to draw information from. Default = 0")] object oStepNumber,
             [ExcelArgument(Name = "properties", Description = "String of comma-separated property names/indices. See PE.trf.ListTransformProperties()")] object properties,
             [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
-            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null,
-            [ExcelArgument(Name = "transpose", Description = "Option to transpose the list. Default = FALSE")] object transpose = null
+            [ExcelArgument(Name = "nullValues", Description = "Optional replacement string for null values. Default value = \"<null>\"")] object nullValues = null
             )
         {
             TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);

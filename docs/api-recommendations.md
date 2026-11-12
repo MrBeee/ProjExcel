@@ -2,14 +2,14 @@
 
 ## API maturity against SharpProj
 
-ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the supported `PE.crs.*` and `PE.trf.*` API only; obsolete `PE.xfm.*` functions are not part of the API and are excluded. It is not an exhaustive audit of every SharpProj member. The priority table lists only gaps requiring attention; implemented behavior and design constraints are not action items.
+ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs; obsolete `PE.xfm.*` functions are not part of the API and are excluded. It is not an exhaustive audit of every SharpProj member. The priority table lists only gaps requiring attention; implemented behavior and design constraints are not action items.
 
 | Priority | Area | Gap requiring attention | Recommended action |
 | --- | --- | --- | --- |
 | P1 | Unavailable operations and error reporting | Execution UDFs already check candidate and grid availability before applying a transform, but non-finite output checks remain generic and supported UDFs do not handle errors consistently. | Improve diagnostics for failures not explained by availability checks and align error handling across `PE.crs.*` and `PE.trf.*`. |
 | P2 | CRS input consistency | `PE.crs.*` now requires a 1×1 CRS range; `PE.trf.*` takes a scalar CRS value. Both support single-value CRS descriptions, but their Excel input shapes still differ. | Align input shapes where practical without reintroducing two-cell authority/code inputs or breaking supported scalar values. |
 
-Explicit candidate selection, 2D/3D/4D input handling, transform metadata access, and an error when `BestOnly` cannot be honored already exist; they are not outstanding priorities. The actions above focus on diagnosing failed operations and aligning CRS inputs rather than mirroring every SharpProj member. Preserve existing UDFs until workbook usage has been audited and migrated.
+Explicit candidate selection, 2D/3D/4D input handling, transform metadata access, and an error when `BestOnly` cannot be honored already exist; they are not outstanding priorities. The actions above focus on diagnosing failed operations and aligning CRS inputs rather than mirroring every SharpProj member. The nine workbooks in `ExcelTests` were audited before the legacy CRS UDFs were excluded; workbooks outside that folder were not covered.
 
 ## Transform parameters
 
@@ -39,9 +39,9 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 - Use consistent `#ERR` diagnostics and validate inputs; `ApplyEx` now rejects more than four coordinate columns instead of treating them as two.
 - Prioritize input compatibility and unavailable-operation diagnostics.
 
-## PE.crs.* deprecation candidates
+## Archived PE.crs.* functions (not compiled)
 
-The following legacy UDFs have values available through the curated `*Properties()` accessors. This is a recommendation for new worksheets, **not** a recommendation to remove or disable existing functions: saved workbooks must continue to work. Match the old `Normalized` setting where applicable. Missing-value placeholders, error results, and the shape of some older returns may differ, so replacements are not necessarily drop-in equivalent for every input.
+The 54 functions listed below, `PE.crs.UsageArea.Center`, and the three legacy serialization functions are preserved in `ProjExcel/Deprecated/deprecated.cs` but **excluded from `ProjExcel.csproj`**. They are not registered by the current add-in; workbooks outside the audited `ExcelTests` folder that still call them will need migration. Use the compiled `*Properties()` functions for the property values below. Match the old `Normalized` setting where applicable. Missing-value placeholders, error results, and the shape of some older returns may differ, so replacements are not necessarily drop-in equivalent for every input.
 
 ### Use `PE.crs.Properties(crs, property, normalized)`
 
@@ -110,88 +110,36 @@ For `PE.crs.CoordinateSystem.Axis.*`, set `coordinateSystemAxis` to `TRUE`:
 
 ### Use `PE.crs.IdentifierProperties(crs, identifierIndex, property)`
 
-Identifier properties read the original (unnormalized) CRS. Existing identifier UDFs default to `Normalized=FALSE`; they can return different results when explicitly called with `Normalized=TRUE`.
+Identifier properties read the original (unnormalized) CRS. The archived identifier UDFs defaulted to `Normalized=FALSE`; they could return different results when explicitly called with `Normalized=TRUE`.
 
 - `PE.crs.Identifiers.Authority`
 - `PE.crs.Identifiers.Code`
 
-## PE.crs.* functions
+### Use `PE.crs.ToString(crs, stringFormat, normalized)`
 
-- `PE.crs.AsJsonString`
-- `PE.crs.AsProjString`
-- `PE.crs.AsWktString`
-- `PE.crs.Axis.Abbreviation`
-- `PE.crs.Axis.Count`
-- `PE.crs.Axis.Direction`
-- `PE.crs.Axis.Name`
-- `PE.crs.Axis.UnitAuthName`
-- `PE.crs.Axis.UnitCode`
-- `PE.crs.Axis.UnitConversionFactor`
-- `PE.crs.Axis.UnitName`
+- `PE.crs.AsJsonString` → `stringFormat="Json"`
+- `PE.crs.AsProjString` → `stringFormat="Proj"`
+- `PE.crs.AsWktString` → `stringFormat="Wkt"`
+
+## Compiled PE.crs.* functions
+
 - `PE.crs.AxisProperties`
-- `PE.crs.CelestialBodyName`
-- `PE.crs.CoordinateSystem.Axis.Abbreviation`
-- `PE.crs.CoordinateSystem.Axis.Count`
-- `PE.crs.CoordinateSystem.Axis.Direction`
-- `PE.crs.CoordinateSystem.Axis.Name`
-- `PE.crs.CoordinateSystem.Axis.UnitAuthName`
-- `PE.crs.CoordinateSystem.Axis.UnitCode`
-- `PE.crs.CoordinateSystem.Axis.UnitConversionFactor`
-- `PE.crs.CoordinateSystem.Axis.UnitName`
-- `PE.crs.CoordinateSystem.CoordinateSystemType`
-- `PE.crs.CoordinateSystem.Name`
-- `PE.crs.CoordinateSystem.Type`
-- `PE.crs.Datum.Name`
-- `PE.crs.Datum.Type`
-- `PE.crs.Ellipsoid.InverseFlattening`
-- `PE.crs.Ellipsoid.IsSemiMinorComputed`
-- `PE.crs.Ellipsoid.Name`
-- `PE.crs.Ellipsoid.SemiMajorMetre`
-- `PE.crs.Ellipsoid.SemiMinorMetre`
-- `PE.crs.Ellipsoid.Type`
 - `PE.crs.EuclideanArea`
 - `PE.crs.EuclideanDistance`
 - `PE.crs.EuclideanDistanceZ`
 - `PE.crs.GeodesicArea`
 - `PE.crs.GeodesicDistance`
 - `PE.crs.GeodesicDistanceZ`
-- `PE.crs.GeodeticCRS.Name`
-- `PE.crs.GeodeticCRS.Type`
 - `PE.crs.IdentifierProperties`
-- `PE.crs.Identifiers.Authority`
-- `PE.crs.Identifiers.Code`
-- `PE.crs.Identifiers.Count`
-- `PE.crs.IsDeprecated`
 - `PE.crs.IsEquivalentTo`
 - `PE.crs.IsEquivalentToRelaxed`
 - `PE.crs.ListAxisProperties`
 - `PE.crs.ListCrsProperties`
 - `PE.crs.ListIdentifierProperties`
-- `PE.crs.Name`
-- `PE.crs.PrimeMeridian.Longitude`
-- `PE.crs.PrimeMeridian.Name`
-- `PE.crs.PrimeMeridian.UnitConversionFactor`
-- `PE.crs.PrimeMeridian.UnitName`
 - `PE.crs.Properties`
-- `PE.crs.Remarks`
-- `PE.crs.Scope`
 - `PE.crs.ToString`
-- `PE.crs.Type`
-- `PE.crs.UsageArea.Center`
-- `PE.crs.UsageArea.Center.HasValues`
-- `PE.crs.UsageArea.Center.X`
-- `PE.crs.UsageArea.Center.Y`
-- `PE.crs.UsageArea.EastLongitude`
-- `PE.crs.UsageArea.MaxX`
-- `PE.crs.UsageArea.MaxY`
-- `PE.crs.UsageArea.MinX`
-- `PE.crs.UsageArea.MinY`
-- `PE.crs.UsageArea.Name`
-- `PE.crs.UsageArea.NorthLatitude`
-- `PE.crs.UsageArea.SouthLatitude`
-- `PE.crs.UsageArea.WestLongitude`
 
-## PE.trf.* functions
+## Compiled PE.trf.* functions
 
 - `PE.trf.Apply`
 - `PE.trf.ApplyEx`

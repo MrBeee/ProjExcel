@@ -19,6 +19,7 @@ namespace ProjExcel
 
         private static readonly object _coordinateReferenceSystemListLock = new object();
         private static object[,] _coordinateReferenceSystemListCache;
+        private static object[,] _coordinateReferenceSystemListWithoutDeprecatedCache;
 
         [ExcelFunction(
             Name = "PE.lst.AuthorityList",
@@ -83,15 +84,17 @@ namespace ProjExcel
             Category = "LST - List related",
             Description = "Provides a (vertical) spillover list with all coordinate reference systems from the PROJ database")]
         public static object CoordinateReferenceSystemList(
-            [ExcelArgument("Use header row (true)", Name = "Header")] object header
+            [ExcelArgument("Use header row (true)", Name = "Header")] object header,
+            [ExcelArgument("Include deprecated CRSs (true)", Name = "AllowDeprecated")] object allowDeprecated = null
             )
         {
             bool bHeader = Optional.Check(header, true);
+            bool bAllowDeprecated = Optional.Check(allowDeprecated, true);
             int nOffset = bHeader ? 1 : 0;
 
             try
             {
-                object[,] data = GetCoordinateReferenceSystemList();
+                object[,] data = GetCoordinateReferenceSystemList(bAllowDeprecated);
 
                 object[,] res = new object[data.GetLength(0) + nOffset, data.GetLength(1)];
 
@@ -104,6 +107,7 @@ namespace ProjExcel
                     res[0, 4] = "Name";
                     res[0, 5] = "AreaName";
                     res[0, 6] = "Nr GeoidModels";
+                    res[0, 7] = "IsDeprecated";
                 }
 
                 for (int i = 0; i < data.GetLength(0); i++)
@@ -122,26 +126,35 @@ namespace ProjExcel
             }
         } // CoordinateReferenceSystemList
 
-        private static object[,] GetCoordinateReferenceSystemList()
+        private static object[,] GetCoordinateReferenceSystemList(bool allowDeprecated)
         {
-            if (_coordinateReferenceSystemListCache != null)
-                return _coordinateReferenceSystemListCache;
+            object[,] cache = allowDeprecated ? _coordinateReferenceSystemListCache : _coordinateReferenceSystemListWithoutDeprecatedCache;
+            if (cache != null)
+                return cache;
 
             lock (_coordinateReferenceSystemListLock)
             {
-                if (_coordinateReferenceSystemListCache == null)
-                    _coordinateReferenceSystemListCache = BuildCoordinateReferenceSystemList();
+                if (allowDeprecated)
+                {
+                    if (_coordinateReferenceSystemListCache == null)
+                        _coordinateReferenceSystemListCache = BuildCoordinateReferenceSystemList(true);
 
-                return _coordinateReferenceSystemListCache;
+                    return _coordinateReferenceSystemListCache;
+                }
+
+                if (_coordinateReferenceSystemListWithoutDeprecatedCache == null)
+                    _coordinateReferenceSystemListWithoutDeprecatedCache = BuildCoordinateReferenceSystemList(false);
+
+                return _coordinateReferenceSystemListWithoutDeprecatedCache;
             }
         } // GetCoordinateReferenceSystemList
 
-        private static object[,] BuildCoordinateReferenceSystemList()
+        private static object[,] BuildCoordinateReferenceSystemList(bool allowDeprecated)
         {
             using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
             {
-                var crsItems = pjContext.GetCoordinateReferenceSystems().ToArray();
-                object[,] res = new object[crsItems.Length, 7];
+                var crsItems = pjContext.GetCoordinateReferenceSystems(new CoordinateReferenceSystemFilter { AllowDeprecated = allowDeprecated }).ToArray();
+                object[,] res = new object[crsItems.Length, 8];
 
                 for (int i = 0; i < crsItems.Length; i++)
                 {
@@ -156,6 +169,7 @@ namespace ProjExcel
                         res[i, 4] = crsInfo.Name;
                         res[i, 5] = crsInfo.AreaName;
                         res[i, 6] = crsInfo.GetGeoidModels().Count;
+                        res[i, 7] = crsInfo.IsDeprecated;
                     }
                 }
 
