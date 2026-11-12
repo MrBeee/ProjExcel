@@ -333,10 +333,10 @@ namespace ProjExcel
                 int nAxis = ParseCrsPropertyIndex(axisIndex, new string[0]);
                 string nullValueText = Optional.Check(nullValues, "<null>");
                 using (ProjContext pjContext = CreateContext())
-                using (var crs = Optional.Check(normalized, true)
-                    ? CreateCrs(oCrs, pjContext).WithAxisNormalized()
-                    : CreateCrs(oCrs, pjContext))
+                using (var originalCrs = CreateCrs(oCrs, pjContext))
+                using (var normalizedCrs = Optional.Check(normalized, true) ? originalCrs.WithAxisNormalized() : null)
                 {
+                    var crs = normalizedCrs ?? originalCrs;
                     var axes = Optional.Check(coordinateSystemAxis, false) ? crs.CoordinateSystem?.Axis : crs.Axis;
                     if (axes == null)
                         return "#ERR: CRS has no axes.";
@@ -450,10 +450,10 @@ namespace ProjExcel
                 int outputFormat = TransformFunctions.ParseOutputFormatString(stringFormat);
 
                 using (ProjContext pjContext = CreateContext())
-                using (var crs = Optional.Check(normalized, true)
-                    ? CreateCrs(oCrs, pjContext).WithAxisNormalized()
-                    : CreateCrs(oCrs, pjContext))
+                using (var originalCrs = CreateCrs(oCrs, pjContext))
+                using (var normalizedCrs = Optional.Check(normalized, true) ? originalCrs.WithAxisNormalized() : null)
                 {
+                    var crs = normalizedCrs ?? originalCrs;
                     string result;
                     switch (outputFormat)
                     {
@@ -477,6 +477,22 @@ namespace ProjExcel
             }
         }
 
+        private static double MeasurementCoordinate(object[,] points, int row, int column, string argument)
+        {
+            object value = points[row, column];
+            double coordinate;
+            if (value is double number)
+                coordinate = number;
+            else if (value is int integer)
+                coordinate = integer;
+            else
+                throw new ArgumentException($"{argument} row {row + 1}, coordinate {column + 1} must be a finite number.");
+
+            if (double.IsNaN(coordinate) || double.IsInfinity(coordinate))
+                throw new ArgumentException($"{argument} row {row + 1}, coordinate {column + 1} must be a finite number.");
+            return coordinate;
+        }
+
         [ExcelFunction(
             Name = "PE.crs.EuclideanArea",
             Description = "Gets Euclidean area defined by 3 or more points in a Projected or Engineering CRS, ignoring elevation differences"
@@ -487,39 +503,41 @@ namespace ProjExcel
             [ExcelArgument("Normalize area to [m2] (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
-            int nPointRows = Points.GetLength(0);
-            int nPointCols = Points.GetLength(1);
-
-            if (nPointRows < 3 )
-                return "#ERR: Invalid input.";
-
-            if (nPointCols < 2 || nPointCols > 4 )
-                return "#ERR: Invalid input.";
-
-            // Now determine number of points in (poly)line
-            int nPoints = nPointRows + 1;
-
-            double[,] points = new double[nPoints, 2];
-
-            // First, get all the points from Points
-            for (int i = 0; i < nPointRows; i++)
-            {
-                points[i, 0] = (double)Points[i, 0];
-                points[i, 1] = (double)Points[i, 1];
-            }
-
-            // Make sure we close the polygon
-            points[nPointRows, 0] = points[0, 0];
-            points[nPointRows, 1] = points[0, 1];
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
+
+                int nPointRows = Points.GetLength(0);
+                int nPointCols = Points.GetLength(1);
+
+                if (nPointRows < 3 )
+                    return "#ERR: Invalid input.";
+
+                if (nPointCols < 2 || nPointCols > 4 )
+                    return "#ERR: Invalid input.";
+
+                // Now determine number of points in (poly)line
+                int nPoints = nPointRows + 1;
+
+                double[,] points = new double[nPoints, 2];
+
+                // First, get all the points from Points
+                for (int i = 0; i < nPointRows; i++)
+                {
+                    points[i, 0] = MeasurementCoordinate(Points, i, 0, "PointList");
+                    points[i, 1] = MeasurementCoordinate(Points, i, 1, "PointList");
+                }
+
+                // Make sure we close the polygon
+                points[nPointRows, 0] = points[0, 0];
+                points[nPointRows, 1] = points[0, 1];
+
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             var projType = crs.Type;
@@ -576,53 +594,48 @@ namespace ProjExcel
             [ExcelArgument("Normalize distance to [m] (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
-            int nPoint1Rows = Point1.GetLength(0);
-            int nPoint1Cols = Point1.GetLength(1);
-
-            int nPoint2Rows = Point2.GetLength(0);
-            int nPoint2Cols = Point2.GetLength(1);
-
-            if (nPoint1Rows < 1 )
-                return "#ERR: Invalid input.";
-
-            if (nPoint1Cols < 2 || nPoint1Cols > 4 )
-                return "#ERR: Invalid input.";
-
-            // Check use of nPoint2; we need it when nPoint1Rows == 1
-            if (nPoint1Rows == 1 &&  nPoint2Rows != 1 )
-                return "#ERR: Invalid input.";
-
-            // Do the check on nPoint2Cols only when we need Point2
-            if (nPoint1Rows == 1 && (nPoint2Cols < 2 || nPoint2Cols > 4  ))
-                return "#ERR: Invalid input.";
-
-            // Now determine number of points in (poly)line
-            int nPoints = nPoint1Rows > 1 ? nPoint1Rows : 2;
-
-            double[,] points = new double[nPoints, 2];
-
-            // First, get all the points from Point1
-            for (int i = 0; i < nPoint1Rows; i++)
-            {
-                points[i, 0] = (double)Point1[i, 0];
-                points[i, 1] = (double)Point1[i, 1];
-            }
-
-            // Now get the last point from Point2 if needed
-            if (nPoints > nPoint1Rows)
-            {
-                points[nPoints - 1, 0] = (double)Point2[0, 0];
-                points[nPoints - 1, 1] = (double)Point2[0, 1];
-            }
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
+
+                int nPoint1Rows = Point1.GetLength(0);
+                int nPoint1Cols = Point1.GetLength(1);
+
+                if (nPoint1Rows < 1 )
+                    return "#ERR: Invalid input. Need at least one point.";
+
+                if (nPoint1Cols < 2 || nPoint1Cols > 4 )
+                    return "#ERR: Invalid input. Each point must have 2 to 4 coordinates.";
+
+                if (nPoint1Rows == 1 &&
+                    (Point2 == null || Point2.GetLength(0) != 1 || Point2.GetLength(1) < 2 || Point2.GetLength(1) > 4))
+                    return "#ERR: End point must be one row with 2 to 4 coordinates.";
+
+                // Now determine number of points in (poly)line
+                int nPoints = nPoint1Rows > 1 ? nPoint1Rows : 2;
+
+                double[,] points = new double[nPoints, 2];
+
+                // First, get all the points from Point1
+                for (int i = 0; i < nPoint1Rows; i++)
+                {
+                    points[i, 0] = MeasurementCoordinate(Point1, i, 0, "startPointOrPointList");
+                    points[i, 1] = MeasurementCoordinate(Point1, i, 1, "startPointOrPointList");
+                }
+
+                // Now get the last point from Point2 if needed
+                if (nPoints > nPoint1Rows)
+                {
+                    points[nPoints - 1, 0] = MeasurementCoordinate(Point2, 0, 0, "endPointOrNul");
+                    points[nPoints - 1, 1] = MeasurementCoordinate(Point2, 0, 1, "endPointOrNul");
+                }
+
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             var projType = crs.Type;
@@ -670,15 +683,11 @@ namespace ProjExcel
             [ExcelArgument("Normalize distance to [m] (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
                 int nPoint1Rows = Point1.GetLength(0);
                 int nPoint1Cols = Point1.GetLength(1);
-
-                int nPoint2Rows = Point2.GetLength(0);
-                int nPoint2Cols = Point2.GetLength(1);
 
                 if (nPoint1Rows < 1 )
                     return "#ERR: Invalid input.";
@@ -686,13 +695,13 @@ namespace ProjExcel
                 if (nPoint1Cols < 2 || nPoint1Cols > 4 )
                     return "#ERR: Invalid input.";
 
-                // Check use of nPoint2; we need it when nPoint1Rows == 1
-                if (nPoint1Rows == 1 &&  nPoint2Rows != 1 )
-                    return "#ERR: Invalid input.";
-
-                // Do the check on nPoint2Cols only when we need Point2
-                if (nPoint1Rows == 1 && (nPoint2Cols < 2 || nPoint2Cols > 4  ))
-                    return "#ERR: Invalid input.";
+                int nPoint2Cols = 0;
+                if (nPoint1Rows == 1)
+                {
+                    if (Point2 == null || Point2.GetLength(0) != 1 || Point2.GetLength(1) < 2 || Point2.GetLength(1) > 4)
+                        return "#ERR: End point must be one row with 2 to 4 coordinates.";
+                    nPoint2Cols = Point2.GetLength(1);
+                }
 
                 // Now determine number of points in (poly)line
                 int nPoints = nPoint1Rows > 1 ? nPoint1Rows : 2;
@@ -706,13 +715,13 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"));
                             break;
                         case 3:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"));
                             break;
                         case 4:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2], (double)Point1[i,3]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 3, "startPointOrPointList"));
                             break;
                     }
                 }
@@ -724,21 +733,23 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"));
                             break;
                         case 3:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"));
                             break;
                         case 4:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2], (double)Point2[0, 3]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 3, "endPointOrNul"));
                             break;
                     }
                 }
 
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             var projType = crs.Type;
@@ -790,46 +801,48 @@ namespace ProjExcel
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
-            int nPointRows = Points.GetLength(0);
-            int nPointCols = Points.GetLength(1);
-
-            if (nPointRows < 3 )
-                return "#ERR: Invalid input.";
-
-            if (nPointCols < 2 || nPointCols > 4 )
-                return "#ERR: Invalid input.";
-
-            // Now determine number of points in (poly)line
-            int nPoints = nPointRows;
-
-            PPoint[] points = new PPoint[nPoints];
-
-            // First, get all the points from Point1
-            for (int i = 0; i < nPoints; i++)
-            {
-                switch (nPointCols)
-                {
-                    default:
-                    case 2:
-                        points[i] = new PPoint((double)Points[i, 0], (double)Points[i, 1]);
-                        break;
-                    case 3:
-                        points[i] = new PPoint((double)Points[i, 0], (double)Points[i, 1], (double)Points[i, 2]);
-                        break;
-                    case 4:
-                        points[i] = new PPoint((double)Points[i, 0], (double)Points[i, 1], (double)Points[i, 2], (double)Points[i,3]);
-                        break;
-                }
-            }
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
+
+                int nPointRows = Points.GetLength(0);
+                int nPointCols = Points.GetLength(1);
+
+                if (nPointRows < 3 )
+                    return "#ERR: Invalid input.";
+
+                if (nPointCols < 2 || nPointCols > 4 )
+                    return "#ERR: Invalid input.";
+
+                // Now determine number of points in (poly)line
+                int nPoints = nPointRows;
+
+                PPoint[] points = new PPoint[nPoints];
+
+                // First, get all the points from Point1
+                for (int i = 0; i < nPoints; i++)
+                {
+                    switch (nPointCols)
+                    {
+                        default:
+                        case 2:
+                            points[i] = new PPoint(MeasurementCoordinate(Points, i, 0, "startPointOrPointList"), MeasurementCoordinate(Points, i, 1, "startPointOrPointList"));
+                            break;
+                        case 3:
+                            points[i] = new PPoint(MeasurementCoordinate(Points, i, 0, "startPointOrPointList"), MeasurementCoordinate(Points, i, 1, "startPointOrPointList"), MeasurementCoordinate(Points, i, 2, "startPointOrPointList"));
+                            break;
+                        case 4:
+                            points[i] = new PPoint(MeasurementCoordinate(Points, i, 0, "startPointOrPointList"), MeasurementCoordinate(Points, i, 1, "startPointOrPointList"), MeasurementCoordinate(Points, i, 2, "startPointOrPointList"), MeasurementCoordinate(Points, i, 3, "startPointOrPointList"));
+                            break;
+                    }
+                }
+
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             double distance = Math.Abs(crs.GeoArea(points));
@@ -858,15 +871,11 @@ namespace ProjExcel
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
                 int nPoint1Rows = Point1.GetLength(0);
                 int nPoint1Cols = Point1.GetLength(1);
-
-                int nPoint2Rows = Point2.GetLength(0);
-                int nPoint2Cols = Point2.GetLength(1);
 
                 if (nPoint1Rows < 1 )
                     return "#ERR: Invalid input.";
@@ -874,13 +883,13 @@ namespace ProjExcel
                 if (nPoint1Cols < 2 || nPoint1Cols > 4 )
                     return "#ERR: Invalid input.";
 
-                // Check use of nPoint2; we need it when nPoint1Rows == 1
-                if (nPoint1Rows == 1 &&  nPoint2Rows != 1 )
-                    return "#ERR: Invalid input.";
-
-                // Do the check on nPoint2Cols only when we need Point2
-                if (nPoint1Rows == 1 && (nPoint2Cols < 2 || nPoint2Cols > 4  ))
-                    return "#ERR: Invalid input.";
+                int nPoint2Cols = 0;
+                if (nPoint1Rows == 1)
+                {
+                    if (Point2 == null || Point2.GetLength(0) != 1 || Point2.GetLength(1) < 2 || Point2.GetLength(1) > 4)
+                        return "#ERR: End point must be one row with 2 to 4 coordinates.";
+                    nPoint2Cols = Point2.GetLength(1);
+                }
 
                 // Now determine number of points in (poly)line
                 int nPoints = nPoint1Rows > 1 ? nPoint1Rows : 2;
@@ -894,13 +903,13 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"));
                             break;
                         case 3:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"));
                             break;
                         case 4:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2], (double)Point1[i,3]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 3, "startPointOrPointList"));
                             break;
                     }
                 }
@@ -912,21 +921,23 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"));
                             break;
                         case 3:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"));
                             break;
                         case 4:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2], (double)Point2[0, 3]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 3, "endPointOrNul"));
                             break;
                     }
                 }
 
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             double distance = crs.GeoDistance(points);
@@ -955,15 +966,11 @@ namespace ProjExcel
             [ExcelArgument("Use normalized axis ordering: {long, lat} & {x, y} (true)", Name = "Normalized")] object normalized
             )
         {
-            bool bNorm  = Optional.Check(normalized, true);
-
             try
             {
+                bool bNorm = Optional.Check(normalized, true);
                 int nPoint1Rows = Point1.GetLength(0);
                 int nPoint1Cols = Point1.GetLength(1);
-
-                int nPoint2Rows = Point2.GetLength(0);
-                int nPoint2Cols = Point2.GetLength(1);
 
                 if (nPoint1Rows < 1 )
                     return "#ERR: Invalid input.";
@@ -971,13 +978,13 @@ namespace ProjExcel
                 if (nPoint1Cols < 2 || nPoint1Cols > 4 )
                     return "#ERR: Invalid input.";
 
-                // Check use of nPoint2; we need it when nPoint1Rows == 1
-                if (nPoint1Rows == 1 &&  nPoint2Rows != 1 )
-                    return "#ERR: Invalid input.";
-
-                // Do the check on nPoint2Cols only when we need Point2
-                if (nPoint1Rows == 1 && (nPoint2Cols < 2 || nPoint2Cols > 4  ))
-                    return "#ERR: Invalid input.";
+                int nPoint2Cols = 0;
+                if (nPoint1Rows == 1)
+                {
+                    if (Point2 == null || Point2.GetLength(0) != 1 || Point2.GetLength(1) < 2 || Point2.GetLength(1) > 4)
+                        return "#ERR: End point must be one row with 2 to 4 coordinates.";
+                    nPoint2Cols = Point2.GetLength(1);
+                }
 
                 // Now determine number of points in (poly)line
                 int nPoints = nPoint1Rows > 1 ? nPoint1Rows : 2;
@@ -991,13 +998,13 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"));
                             break;
                         case 3:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"));
                             break;
                         case 4:
-                            points[i] = new PPoint((double)Point1[i, 0], (double)Point1[i, 1], (double)Point1[i, 2], (double)Point1[i,3]);
+                            points[i] = new PPoint(MeasurementCoordinate(Point1, i, 0, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 1, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 2, "startPointOrPointList"), MeasurementCoordinate(Point1, i, 3, "startPointOrPointList"));
                             break;
                     }
                 }
@@ -1009,21 +1016,23 @@ namespace ProjExcel
                     {
                         default:
                         case 2:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"));
                             break;
                         case 3:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"));
                             break;
                         case 4:
-                            points[nPoints - 1] = new PPoint((double)Point2[0, 0], (double)Point2[0, 1], (double)Point2[0, 2], (double)Point2[0, 3]);
+                            points[nPoints - 1] = new PPoint(MeasurementCoordinate(Point2, 0, 0, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 1, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 2, "endPointOrNul"), MeasurementCoordinate(Point2, 0, 3, "endPointOrNul"));
                             break;
                     }
                 }
 
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs = bNorm ? CreateCrs(oCrs, pjContext).WithAxisNormalized() : CreateCrs(oCrs, pjContext))
+                    using (var originalCrs = CreateCrs(oCrs, pjContext))
+                    using (var normalizedCrs = bNorm ? originalCrs.WithAxisNormalized() : null)
                     {
+                        var crs = normalizedCrs ?? originalCrs;
                         if (crs != null)
                         {
                             double distance = crs.GeoDistanceZ(points);
@@ -1057,9 +1066,13 @@ namespace ProjExcel
             {
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs1 = bNorm ? CreateCrs(oCrs1, pjContext).WithAxisNormalized() : CreateCrs(oCrs1, pjContext))
-                    using (var crs2 = bNorm ? CreateCrs(oCrs2, pjContext).WithAxisNormalized() : CreateCrs(oCrs2, pjContext))
+                    using (var originalCrs1 = CreateCrs(oCrs1, pjContext))
+                    using (var normalizedCrs1 = bNorm ? originalCrs1.WithAxisNormalized() : null)
+                    using (var originalCrs2 = CreateCrs(oCrs2, pjContext))
+                    using (var normalizedCrs2 = bNorm ? originalCrs2.WithAxisNormalized() : null)
                     {
+                        var crs1 = normalizedCrs1 ?? originalCrs1;
+                        var crs2 = normalizedCrs2 ?? originalCrs2;
                         if (crs1 != null && crs2 != null )
                             return crs1.IsEquivalentTo(crs2, pjContext);
                         else
@@ -1090,9 +1103,13 @@ namespace ProjExcel
             {
                 using (ProjContext pjContext = CreateContext())
                 {
-                    using (var crs1 = bNorm ? CreateCrs(oCrs1, pjContext).WithAxisNormalized() : CreateCrs(oCrs1, pjContext))
-                    using (var crs2 = bNorm ? CreateCrs(oCrs2, pjContext).WithAxisNormalized() : CreateCrs(oCrs2, pjContext))
+                    using (var originalCrs1 = CreateCrs(oCrs1, pjContext))
+                    using (var normalizedCrs1 = bNorm ? originalCrs1.WithAxisNormalized() : null)
+                    using (var originalCrs2 = CreateCrs(oCrs2, pjContext))
+                    using (var normalizedCrs2 = bNorm ? originalCrs2.WithAxisNormalized() : null)
                     {
+                        var crs1 = normalizedCrs1 ?? originalCrs1;
+                        var crs2 = normalizedCrs2 ?? originalCrs2;
                         if (crs1 != null && crs2 != null )
                             return crs1.IsEquivalentToRelaxed(crs2, pjContext);
                         else

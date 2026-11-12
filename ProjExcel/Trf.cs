@@ -199,6 +199,36 @@ namespace ProjExcel
             return 0;
         }
 
+        private static int ParseTransformStringFormat(object value)
+        {
+            if (value == null || value == DBNull.Value || value == Type.Missing ||
+                value is ExcelMissing || value is ExcelEmpty ||
+                (value is string text && string.IsNullOrWhiteSpace(text)))
+                return 1;
+
+            if (value is string format)
+            {
+                switch (format.Trim().ToUpperInvariant())
+                {
+                    case "PROJ": return 1;
+                    case "WKT": return 2;
+                    case "JSON": return 3;
+                }
+            }
+
+            throw new ArgumentException("stringFormat must be Proj, Wkt, or Json.");
+        }
+
+        private static string FormatTransformString(CoordinateTransform transform, int outputFormat)
+        {
+            switch (outputFormat)
+            {
+                case 2: return transform.AsWellKnownText();
+                case 3: return transform.AsProjJson();
+                default: return transform.AsProjString();
+            }
+        }
+
         private static string FormatCoordinateValue(double value)
         {
             return value.ToString("0.00", CultureInfo.InvariantCulture);
@@ -504,27 +534,46 @@ namespace ProjExcel
             try
             {
                 TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
-                int outputFormat = ParseOutputFormatString(stringFormat);
+                int outputFormat = ParseTransformStringFormat(stringFormat);
                 using (var pc = ProjService.Default.CreateContext(optionValues))
                 {
                     using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
                     {
                         CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
-
-                        // work with the selected transform and return its string representation in the requested format
-                        switch (outputFormat)
-                        {
-                            case 1: // Proj
-                                return selectedTransform.AsProjString();
-                            case 2: // Wkt
-                                return selectedTransform.AsWellKnownText();
-                            case 3: // Json
-                                return selectedTransform.AsProjJson();
-                            default:
-                                return selectedTransform.AsProjString(); // Default to Proj string if no valid format is specified
-                        }
+                        return FormatTransformString(selectedTransform, outputFormat);
                     }
 
+                }
+            }
+            catch (System.Exception ex)
+            {
+                return $"#ERR: {ex.Message}";
+            }
+        }
+
+        [ExcelFunction(Name = "PE.trf.ToStringReversed", Description = "Create a string representation of the inverse coordinate transform")]
+        public static object ToStringReversed(
+            [ExcelArgument(Name = "sourceCrs", Description = "Source CRS (or transform description)")] object SourceCrs,
+            [ExcelArgument(Name = "targetCrs", Description = "Target CRS (leave empty for transform)")] object TargetCrs,
+            [ExcelArgument(Name = "transformOptions", Description = "Optional token string from PE.trf.Options() or PE.trf.OptionsEx(). Default: leave empty")] object options,
+            [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (\"Proj\")")] object stringFormat
+            )
+        {
+            try
+            {
+                TransformOptions.CoordinateTransformOptionsInput optionValues = TransformOptions.CoordinateTransformOptionsInput.Parse(options);
+                int outputFormat = ParseTransformStringFormat(stringFormat);
+                using (var pc = ProjService.Default.CreateContext(optionValues))
+                using (CoordinateTransform trf = CreateTransformForInput(SourceCrs, TargetCrs, optionValues, pc))
+                {
+                    CoordinateTransform selectedTransform = SelectCandidateTransform(trf, optionValues.CandidateIndex);
+                    using (CoordinateTransform inverse = selectedTransform.CreateInverse(pc))
+                    {
+                        if (inverse == null)
+                            return "#ERR: No inverse transformation pipeline could be constructed.";
+
+                        return FormatTransformString(inverse, outputFormat);
+                    }
                 }
             }
             catch (System.Exception ex)

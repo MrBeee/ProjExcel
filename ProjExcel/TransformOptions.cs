@@ -523,24 +523,47 @@ namespace ProjExcel
 
         private static string BuildAreaToken(object westLongitude, object southLatitude, object eastLongitude, object northLatitude)
         {
-            double? west = ParseNullableDoubleOrDefault(westLongitude, null);
-            double? south = ParseNullableDoubleOrDefault(southLatitude, null);
-            double? east = ParseNullableDoubleOrDefault(eastLongitude, null);
-            double? north = ParseNullableDoubleOrDefault(northLatitude, null);
+            bool missingWest = IsOmittedOption(westLongitude);
+            bool missingSouth = IsOmittedOption(southLatitude);
+            bool missingEast = IsOmittedOption(eastLongitude);
+            bool missingNorth = IsOmittedOption(northLatitude);
 
-            if (!west.HasValue || !south.HasValue || !east.HasValue || !north.HasValue)
+            if (missingWest && missingSouth && missingEast && missingNorth)
                 return string.Empty;
+            if (missingWest || missingSouth || missingEast || missingNorth)
+                throw new ArgumentException("Area requires all four coordinates: WestLongitude, SouthLatitude, EastLongitude, and NorthLatitude.");
 
-            if (west.Value < -180 || west.Value > 180 ||
-                east.Value < -180 || east.Value > 180 ||
-                south.Value < -90 || south.Value > 90 ||
-                north.Value < -90 || north.Value > 90 ||
-                south.Value > north.Value)
+            double west = ParseFiniteOptionDouble(westLongitude, "WestLongitude");
+            double south = ParseFiniteOptionDouble(southLatitude, "SouthLatitude");
+            double east = ParseFiniteOptionDouble(eastLongitude, "EastLongitude");
+            double north = ParseFiniteOptionDouble(northLatitude, "NorthLatitude");
+
+            if (west < -180 || west > 180 ||
+                east < -180 || east > 180 ||
+                south < -90 || south > 90 ||
+                north < -90 || north > 90 ||
+                south > north)
             {
-                return string.Empty;
+                throw new ArgumentException("Area coordinates must be within longitude [-180, 180] and latitude [-90, 90], with SouthLatitude no greater than NorthLatitude.");
             }
 
-            return string.Join(",", west.Value, south.Value, east.Value, north.Value);
+            return string.Join(",", west, south, east, north);
+        }
+
+        private static bool IsOmittedOption(object value)
+        {
+            return value == null || value == DBNull.Value || value == Type.Missing ||
+                value is ExcelMissing || value is ExcelEmpty ||
+                (value is string text && string.IsNullOrWhiteSpace(text));
+        }
+
+        private static double ParseFiniteOptionDouble(object value, string name)
+        {
+            if (value is ExcelError || value is object[,] || value is bool ||
+                !double.TryParse(Convert.ToString(value), out double number) ||
+                double.IsNaN(number) || double.IsInfinity(number))
+                throw new ArgumentException($"{name} must be a finite number.");
+            return number;
         }
 
         // Note: this uUDF creates a textual representation in Excel of the SharpProj class CoordinateTransformOptions
@@ -579,9 +602,14 @@ namespace ProjExcel
         {
             try
             {
+            int index = 0;
+            if (!IsOmittedOption(candidateIndex) &&
+                (!int.TryParse(Convert.ToString(candidateIndex), out index) || index < 0))
+                throw new ArgumentException("CandidateIndex must be a non-negative integer.");
+
             var parts = new List<string>
             {
-                "CandidateIndex=" + Math.Max(ParseIntOrDefault(candidateIndex, 0), 0)
+                "CandidateIndex=" + index
             };
 
             if (ParseBooleanOption(allowDeprecatedCrs, "AllowDeprecatedCrs", false))
@@ -589,11 +617,19 @@ namespace ProjExcel
 
             string authorityValue = Convert.ToString(authority);
             if (!string.IsNullOrWhiteSpace(authorityValue))
+            {
+                if (authority is ExcelError || authority is object[,] || authorityValue.IndexOfAny(new[] { ';', '|', '=' }) >= 0)
+                    throw new ArgumentException("Authority must be a single name without semicolons, pipes, or equals signs.");
                 parts.Add("Authority=" + authorityValue);
+            }
 
-            double? accuracyValue = ParseNullableDoubleOrDefault(accuracy, null);
-            if (accuracyValue.HasValue)
-                parts.Add("Accuracy=" + Convert.ToString(accuracyValue.Value));
+            if (!IsOmittedOption(accuracy))
+            {
+                double accuracyValue = ParseFiniteOptionDouble(accuracy, "Accuracy");
+                if (accuracyValue < 0)
+                    throw new ArgumentException("Accuracy must be a non-negative finite number.");
+                parts.Add("Accuracy=" + Convert.ToString(accuracyValue));
+            }
 
             string areaValue = BuildAreaToken(westLongitude, southLatitude, eastLongitude, northLatitude);
             if (!string.IsNullOrEmpty(areaValue))
