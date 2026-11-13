@@ -566,6 +566,39 @@ namespace ProjExcel
             return number;
         }
 
+        [ExcelFunction(Name = "PE.trf.ListTransformOptions", Description = "List transform option inputs and token settings with their purposes")]
+        public static object[,] ListTransformOptions()
+        {
+            return new object[,]
+            {
+                { "Option", "Purpose" },
+                { "Accuracy", "Desired non-negative transformation accuracy; blank means no accuracy filter." },
+                { "AllowDeprecatedCrs", "Allow deprecated source or target CRSs (default FALSE)." },
+                { "Area", "Token field built from WestLongitude, SouthLatitude, EastLongitude, and NorthLatitude in PE.trf.Options()." },
+                { "Authority", "Restrict candidate operations to the named authority; blank means no filter." },
+                { "BestOnly", "Request only the best available transform (default FALSE)." },
+                { "CandidateIndex", "Zero-based index of the selected transform candidate (default 0)." },
+                { "EastLongitude", "Eastern longitude of the area of interest; supply all four area coordinates together." },
+                { "EnableGridCache", "Enable caching of downloaded grids via PE.trf.OptionsEx() (default from PROJ settings)." },
+                { "EnableNetworkConnections", "Allow online grid downloads via PE.trf.OptionsEx() (default from PROJ settings)." },
+                { "EndpointUrl", "PROJ network endpoint URL set via PE.trf.OptionsEx()." },
+                { "ForceOver", "Allow longitude values outside the usual range when transforming (default FALSE)." },
+                { "GridCachePath", "Grid cache file path set via PE.trf.OptionsEx()." },
+                { "GridCacheSizeMb", "Positive grid cache size in MB set via PE.trf.OptionsEx()." },
+                { "GridCacheTtlSeconds", "Non-negative grid cache lifetime in seconds set via PE.trf.OptionsEx()." },
+                { "IntermediateCrsUsage", "Control use of intermediate CRSs: Auto (default), Always, or Never." },
+                { "LogLevel", "PROJ logging level set via PE.trf.OptionsEx()." },
+                { "NoBallparkConversions", "Exclude approximate ballpark conversions (default FALSE)." },
+                { "NoDiscardIfMissing", "Keep candidate operations even if a required grid is missing (default FALSE)." },
+                { "NorthLatitude", "Northern latitude of the area of interest; supply all four area coordinates together." },
+                { "SouthLatitude", "Southern latitude of the area of interest; supply all four area coordinates together." },
+                { "StrictContains", "Require the operation's usage area to strictly contain the area of interest (default FALSE)." },
+                { "UsePrimaryGridNames", "Use primary grid names when creating operations (default FALSE)." },
+                { "UseSuperseded", "Include superseded operations among candidates (default FALSE)." },
+                { "WestLongitude", "Western longitude of the area of interest; supply all four area coordinates together." }
+            };
+        }
+
         // Note: this uUDF creates a textual representation in Excel of the SharpProj class CoordinateTransformOptions
         // This class has been defined here: D:\GitHub\SharpProj\src\SharpProj\CoordinateArea.h
 
