@@ -64,6 +64,8 @@ namespace ProjExcel
 
             public bool AllowDeprecatedCrs { get; set; }
             public int CandidateIndex { get; set; }
+            public bool PromoteSourceTo3D { get; set; }
+            public bool DemoteSourceTo2D { get; set; }
             public string ErrorMessage { get; set; }
 
             public bool? EnableNetworkConnections { get; set; }
@@ -181,6 +183,10 @@ namespace ProjExcel
                             throw new ArgumentException($"CandidateIndex must be a non-negative integer (received '{value}').");
                         values.CandidateIndex = candidateIndex;
                     }
+                    else if (string.Equals(key, "PromoteSourceTo3D", StringComparison.OrdinalIgnoreCase))
+                        values.PromoteSourceTo3D = ParseBooleanOption(value, key, false);
+                    else if (string.Equals(key, "DemoteSourceTo2D", StringComparison.OrdinalIgnoreCase))
+                        values.DemoteSourceTo2D = ParseBooleanOption(value, key, false);
                     else if (string.Equals(key, "EnableNetworkConnections", StringComparison.OrdinalIgnoreCase))
                         values.EnableNetworkConnections = ParseBooleanOption(value, key, ProjService.Default.EnableNetworkConnections);
                     else if (string.Equals(key, "EnableGridCache", StringComparison.OrdinalIgnoreCase))
@@ -211,6 +217,8 @@ namespace ProjExcel
                     else
                         throw new ArgumentException($"Unknown transform option '{key}'.");
                 }
+                if (values.PromoteSourceTo3D && values.DemoteSourceTo2D)
+                    throw new ArgumentException("PromoteSourceTo3D and DemoteSourceTo2D cannot both be TRUE.");
                 return values;
             }
         }
@@ -578,6 +586,7 @@ namespace ProjExcel
                 { "Authority", "Restrict candidate operations to the named authority; blank means no filter." },
                 { "BestOnly", "Request only the best available transform (default FALSE)." },
                 { "CandidateIndex", "Zero-based index of the selected transform candidate (default 0)." },
+                { "DemoteSourceTo2D", "Demote the source CRS to 2D before selecting a transform (default FALSE); requires a source/target CRS pair. Drops the vertical component, not a height conversion; incompatible with PromoteSourceTo3D." },
                 { "EastLongitude", "Eastern longitude of the area of interest; supply all four area coordinates together." },
                 { "EnableGridCache", "Enable caching of downloaded grids via PE.trf.OptionsEx() (default from PROJ settings)." },
                 { "EnableNetworkConnections", "Allow online grid downloads via PE.trf.OptionsEx() (default from PROJ settings)." },
@@ -591,6 +600,7 @@ namespace ProjExcel
                 { "NoBallparkConversions", "Exclude approximate ballpark conversions (default FALSE)." },
                 { "NoDiscardIfMissing", "Keep candidate operations even if a required grid is missing (default FALSE)." },
                 { "NorthLatitude", "Northern latitude of the area of interest; supply all four area coordinates together." },
+                { "PromoteSourceTo3D", "Promote the source CRS to 3D before selecting a transform (default FALSE); requires a source/target CRS pair. Incompatible with DemoteSourceTo2D." },
                 { "SouthLatitude", "Southern latitude of the area of interest; supply all four area coordinates together." },
                 { "StrictContains", "Require the operation's usage area to strictly contain the area of interest (default FALSE)." },
                 { "UsePrimaryGridNames", "Use primary grid names when creating operations (default FALSE)." },
@@ -630,7 +640,9 @@ namespace ProjExcel
             [ExcelArgument(Name = "StrictContains", Description = "Require transform to strictly contain the area of interest (FALSE)")] object strictContains = null,
 
             [ExcelArgument(Name = "UsePrimaryGridNames", Description = "Use primary grid names (FALSE)")] object usePrimaryGridNames = null,
-            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null
+            [ExcelArgument(Name = "UseSuperseded", Description = "Allow superseded transforms (FALSE)")] object useSuperseded = null,
+            [ExcelArgument(Name = "PromoteSourceTo3D", Description = "Promote the source CRS to 3D before selecting a transform (FALSE)")] object promoteSourceTo3D = null,
+            [ExcelArgument(Name = "DemoteSourceTo2D", Description = "Use the source CRS's 2D horizontal component before selecting a transform (FALSE)")] object demoteSourceTo2D = null
             )
         {
             try
@@ -702,6 +714,16 @@ namespace ProjExcel
 
             if (ParseBooleanOption(useSuperseded, "UseSuperseded", false))
                 parts.Add("UseSuperseded=True");
+
+            bool promote = ParseBooleanOption(promoteSourceTo3D, "PromoteSourceTo3D", false);
+            bool demote = ParseBooleanOption(demoteSourceTo2D, "DemoteSourceTo2D", false);
+            if (promote && demote)
+                throw new ArgumentException("PromoteSourceTo3D and DemoteSourceTo2D cannot both be TRUE.");
+
+            if (promote)
+                parts.Add("PromoteSourceTo3D=True");
+            if (demote)
+                parts.Add("DemoteSourceTo2D=True");
 
             return string.Join("; ", parts);
             }

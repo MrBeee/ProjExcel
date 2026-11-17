@@ -130,15 +130,44 @@ namespace ProjExcel
         {
             CoordinateTransformOptions coordinateTransformOptions = TransformOptions.CreateCoordinateTransformOptions(optionValues);
 
+            if (optionValues.PromoteSourceTo3D && optionValues.DemoteSourceTo2D)
+                throw new ArgumentException("PromoteSourceTo3D and DemoteSourceTo2D cannot both be TRUE.");
+
             if (Optional.IsEmpty(targetCrs))
+            {
+                if (optionValues.PromoteSourceTo3D || optionValues.DemoteSourceTo2D)
+                    throw new ArgumentException("PromoteSourceTo3D and DemoteSourceTo2D require a source and target CRS; they cannot be used with a transform description.");
                 return CreateTransformFromDescription(sourceCrs, optionValues, coordinateTransformOptions, pc);
+            }
 
             using (var source = Crs.CreateCrs(sourceCrs, pc))
-            using (var src = source.WithNormalizedAxis(pc))
             using (var target = Crs.CreateCrs(targetCrs, pc))
-            using (var dst = target.WithNormalizedAxis(pc))
             {
-                return CreateTransformWithOptions(src, dst, optionValues, coordinateTransformOptions, pc);
+                CoordinateReferenceSystem adjustedSource = null;
+                CoordinateReferenceSystem selectedSource;
+                if (optionValues.PromoteSourceTo3D)
+                {
+                    adjustedSource = source.PromotedTo3D();
+                    selectedSource = adjustedSource;
+                }
+                else if (optionValues.DemoteSourceTo2D)
+                {
+                    adjustedSource = source.DemotedTo2D();
+                    selectedSource = adjustedSource;
+                }
+                else
+                {
+                    selectedSource = source;
+                }
+
+                using (adjustedSource)
+                {
+                    using (var src = selectedSource.WithNormalizedAxis(pc))
+                    using (var dst = target.WithNormalizedAxis(pc))
+                    {
+                        return CreateTransformWithOptions(src, dst, optionValues, coordinateTransformOptions, pc);
+                    }
+                }
             }
         }
 
