@@ -129,6 +129,7 @@ namespace ProjExcel
             "Axis.Count", "CelestialBodyName", "CoordinateSystem.Axis.Count",
             "CoordinateSystem.CoordinateSystemType", "CoordinateSystem.Name", "CoordinateSystem.Type",
             "Datum.Name", "Datum.Type",
+            "DistanceTransform.Exists", "DistanceTransform.HasInverse", "DistanceTransform.IsAvailable",
             "Ellipsoid.InverseFlattening", "Ellipsoid.IsSemiMinorComputed", "Ellipsoid.Name",
             "Ellipsoid.SemiMajorMetre", "Ellipsoid.SemiMinorMetre", "Ellipsoid.Type",
             "GeodeticCRS.Name", "GeodeticCRS.Type", "Identifiers.Count", "IsDeprecated", "Name",
@@ -227,6 +228,9 @@ namespace ProjExcel
                 case "CoordinateSystem.Axis.Count": value = crs.CoordinateSystem?.Axis?.Count; break;
                 case "Datum.Name": value = crs.Datum?.Name; break;
                 case "Datum.Type": value = crs.Datum?.Type.ToString(); break;
+                case "DistanceTransform.Exists": value = crs.DistanceTransform != null; break;
+                case "DistanceTransform.HasInverse": value = crs.DistanceTransform?.HasInverse ?? false; break;
+                case "DistanceTransform.IsAvailable": value = crs.DistanceTransform?.IsAvailable ?? false; break;
                 case "GeodeticCRS.Name": value = crs.GeodeticCRS?.Name; break;
                 case "GeodeticCRS.Type": value = crs.GeodeticCRS?.Type.ToString(); break;
                 case "Ellipsoid.Name": value = crs.Ellipsoid?.Name; break;
