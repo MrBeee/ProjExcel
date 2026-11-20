@@ -307,6 +307,42 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.crs.CoordinateMetadataProperties", Description = "Show coordinate metadata type, CRS presence, and epoch in adjacent cells")]
+        public static object CoordinateMetadataProperties(
+            [ExcelArgument(Name = "metadata", Description = "Single coordinate metadata definition, for example ITRF2014@2025.0")] object metadata)
+        {
+            try
+            {
+                if (metadata is object[,] range)
+                {
+                    if (range.GetLength(0) != 1 || range.GetLength(1) != 1)
+                        throw new ArgumentException("Coordinate metadata must be a single cell.");
+                    metadata = range[0, 0];
+                }
+
+                if (!(metadata is string definition) || string.IsNullOrWhiteSpace(definition))
+                    throw new ArgumentException("Coordinate metadata must be a non-empty definition string.");
+
+                using (ProjContext context = CreateContext())
+                using (var created = context.Create(definition))
+                {
+                    var coordinateMetadata = created as CoordinateMetadata;
+                    if (coordinateMetadata == null)
+                        throw new ArgumentException("Definition does not describe coordinate metadata.");
+
+                    return new object[,]
+                    {
+                        { coordinateMetadata.Type.ToString(), coordinateMetadata.CRS != null,
+                            coordinateMetadata.Epoch.HasValue ? (object)coordinateMetadata.Epoch.Value : "<null>" }
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                return AddIn.ProcessException(ex);
+            }
+        }
+
         [ExcelFunction(Name = "PE.crs.ListDistanceTransformBounds", Description = "Sample the CRS usage area and list projected extrema of the reversed distance transform")]
         public static object ListDistanceTransformBounds(
             [ExcelArgument(Name = "Crs", Description = "Single CRS value, for example ESRI:102034")] object oCrs)

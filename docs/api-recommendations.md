@@ -2,17 +2,17 @@
 
 ## API maturity against SharpProj
 
-ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs. It is not an exhaustive audit of every SharpProj member. No unaddressed API gap has been established as a priority. Transform option parsing is handled inside UDF error boundaries; `Apply*` and `Apply*Ex` report row/candidate/coordinate failures, and `Roundtrip` validates its point, count, and result and accepts a forward/reverse flag. Compiled CRS and transform UDFs take scalar CRS arguments. The shared CRS parser also accepts a 1×1 array and rejects multi-cell CRS ranges for `PE.crs.*` and CRS-pair `PE.trf.*` calls; the separate transform-description path (blank target CRS) does not accept an array. Numeric EPSG inputs in both creation paths are checked before integer conversion.
+ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs. It is not an exhaustive audit of every SharpProj member. Some SharpProj-only operations remain without exact Excel equivalents, notably standalone `CoordinateArea` construction/mutation and direct inspection of a CRS after `PromotedTo3D()` or `DemotedTo2D()`. Transform option parsing is handled inside UDF error boundaries; `Apply*` and `Apply*Ex` report row/candidate/coordinate failures, and `Roundtrip` validates its point, count, and result and accepts a forward/reverse flag. Compiled CRS and transform UDFs take scalar CRS arguments. The shared CRS parser also accepts a 1×1 array and rejects multi-cell CRS ranges for `PE.crs.*` and CRS-pair `PE.trf.*` calls; the separate transform-description path (blank target CRS) does not accept an array. Numeric EPSG inputs in both creation paths are checked before integer conversion.
 
-Explicit candidate selection, 2D/3D/4D input handling, and transform metadata access already exist; they are not outstanding priorities. When transform creation fails with `BestOnly=TRUE`, ProjExcel retains SharpProj's error rather than relabeling every failure as an invalid `BestOnly` option or retrying with `BestOnly=FALSE`. Preserve single-value CRS inputs and the existing transform-description path; do not add two-cell authority/code inputs. `docs/API_ProjExcel.xlsx` is the intended API test workbook for all API groups (deg/lst/trf/...). `ExcelTests` aims to mimic, as far as practical, tests in `D:\GitHub\SharpProj\src\SharpProj.Tests` and also contains many ProjExcel API checks: inspection of the nine workbooks found approximately 4,464 `PE.*` formula cells in `BasicTests.xlsx` (including `ApplyEx`, `ApplyReversedEx`, and `Roundtrip`) and 18 in `AxisHeightsTests.xlsx`, along with `IF` comparisons and numeric difference checks. `DistanceTests.xlsx` also contains `PE.*` formulas; the other six workbooks contain only an empty `Sheet1`. These observations describe saved formulas, not the outcome of recalculating the workbooks. The earlier audit for legacy CRS UDF usage covered these nine workbooks, not workbooks outside `ExcelTests`.
+Explicit candidate selection, 2D/3D/4D input handling, and transform metadata access already exist; they are not outstanding priorities. When transform creation fails with `BestOnly=TRUE`, ProjExcel retains SharpProj's error rather than relabeling every failure as an invalid `BestOnly` option or retrying with `BestOnly=FALSE`. Preserve single-value CRS inputs and the existing transform-description path; do not add two-cell authority/code inputs. `docs/API_ProjExcel.xlsx` is the intended API test workbook for all API groups (deg/lst/trf/...). `ExcelTests` aims to mimic, as far as practical, tests in `D:\GitHub\SharpProj\src\SharpProj.Tests` and also contains many ProjExcel API checks: the current saved `BasicTests.xlsx` has approximately 14,327 formula anchors containing `PE.*`, including its large `WalkReferenceSystems` sheet. This counts formulas in the XLSX, not evaluated spill cells or passing checks. The other six workbooks besides `BasicTests.xlsx`, `AxisHeightsTests.xlsx`, and `DistanceTests.xlsx` still contain only an empty `Sheet1`. The earlier audit for legacy CRS UDF usage covered these nine workbooks, not workbooks outside `ExcelTests`.
 
 ## Unit test workbook coverage
 
-`ExcelTests` has nine workbooks corresponding to the nine source files with `[TestMethod]` methods in `D:\GitHub\SharpProj\src\SharpProj.Tests`. The latest saved `BasicTests.xlsx` contains a sheet named for **every one of its 32 source methods**, but only **23 are populated**; nine remain empty. Combined with the previously audited four populated sheets in `AxisHeightsTests.xlsx` and `DistanceTests.xlsx`, that gives **27 populated test sheets for 67 source methods** and **40 methods without a populated corresponding sheet**. A populated sheet is not necessarily a completed test: coverage requires inputs and explicit checks equivalent to the source method's material assertions. Neither the saved formula values nor this inventory establish that any workbook passes after live Excel recalculation.
+`ExcelTests` has nine workbooks corresponding to the nine source files with `[TestMethod]` methods in `D:\GitHub\SharpProj\src\SharpProj.Tests`. The latest saved `BasicTests.xlsx` contains a populated sheet named for **every one of its 32 source methods**. Combined with the previously audited four populated sheets in `AxisHeightsTests.xlsx` and `DistanceTests.xlsx`, that gives **36 populated test sheets for 67 source methods** and **31 methods without a populated corresponding sheet**. A populated sheet is not necessarily a completed test: coverage requires inputs and explicit checks equivalent to the source method's material assertions. Neither the saved formula values nor this inventory establish that any workbook passes after live Excel recalculation.
 
 | Workbook | Populated sheets representing source methods | Source methods | Gaps |
 | --- | ---: | ---: | --- |
-| `BasicTests.xlsx` | 23 | 32 | All method sheets exist; nine are empty. |
+| `BasicTests.xlsx` | 32 | 32 | All method sheets are populated; assertion parity remains incomplete. |
 | `AxisHeightsTests.xlsx` | 2 | 5 | Three methods lack sheets. |
 | `DistanceTests.xlsx` | 2 | 3 | `DistanceDemoNormalized` lacks a sheet. |
 | `InfoTests.xlsx` | 0 | 9 | Empty `Sheet1` only. |
@@ -22,15 +22,23 @@ Explicit candidate selection, 2D/3D/4D input handling, and transform metadata ac
 | `SridTests.xlsx` | 0 | 4 | Empty `Sheet1` only. |
 | `TransformDetailsTests.xlsx` | 0 | 6 | Empty `Sheet1` only. |
 
-In `BasicTests.xlsx`, populate the nine empty method sheets: `WalkReferenceSystems`, `GetGeoidModels`, `CoordinateAreaTests`, `GnomoricBounds`, `PromoteDemote`, `TestRemarks`, `UnitTest`, `TestAuthorities`, and `TestCoordinateMetadata`. `DegRadTests` is now populated, and sheet names now match all 32 source method names exactly; no new or renamed method sheets are needed.
+In `BasicTests.xlsx`, all 32 method sheets are now populated and their names match the source methods exactly; no new or renamed method sheets are needed. The newer list and metadata UDFs support `GetGeoidModels`, `UnitTest`, `TestAuthorities`, and `TestCoordinateMetadata`; sheet presence and a TRUE summary do not by themselves establish full test equivalence.
 
-The populated sheets still need an assertion-by-assertion review. `EpsgVersionTest` and `TestTime` now contain more formulas and checks than in the earlier audit; verify their coverage against all source assertions rather than relying on the old cell references. `WalkBodies` still has a display-only list without an explicit check, and `WalkAllOperations` needs its checks compared with the source assertions. `MissingProjections` now checks 99 filtered ESRI records using `DistanceTransform.Exists`, `HasInverse`, and `IsAvailable`, and sums the failures; its saved total is **11** against a hard-coded expected **10**, so its summary comparison does not pass. This is a genuine saved mismatch, not evidence that any particular candidate should be excluded; the source test's 10 is also hard-coded. Saved `FALSE` values on property UDFs can be expected data rather than failed assertions. The separate `TestNewZealand_defmodel` WKT issue remains described below. `AxisHeightsTests.xlsx` has a populated `AxisHeightTests` sheet apparently representing `HeightConversionNLBE` and a populated `DistanceInNL` sheet, but lacks `RecreateViaWKT`, `NL_Wgs84`, and `CreateFromWKT`. Both populated `DistanceTests.xlsx` sheets also need assertion-equivalence review.
+The saved BasicTests formulas reveal the following remaining gaps; the cached values are not proof of a fresh recalculation:
+
+- `MissingProjections!P109:Q109` now compares **11** with **11**, whereas `BasicTests.cs` still asserts **10** for the ESRI 53000–54999 count. The sheet also lacks checks for the subsequent explicit EPSG and ESRI cases that the source expects to fail (or marks inconclusive).
+- `WalkBodies!E6` only references the first body's `IsEarth` value. Add checks that no later body is Earth and that every body's Name and Authority is nonempty. `TestRemarks!J14:T34` lists candidate-level fields; the source asserts on the *steps* of each candidate except the last (at least one nonempty Remarks and all nonempty MethodName/Identifier.Code). Use `PE.trf.ListTransformSteps` for those checks.
+- `PromoteDemote!C36:C37` explicitly notes that promoted axis count and Z-axis details are not tested: transform `PromoteSourceTo3D`/`DemoteSourceTo2D` options cannot expose a modified CRS to `PE.crs.Properties` or `AxisProperties`. `CoordinateAreaTests!E10:E13` checks EPSG:4326 usage-area bounds rather than standalone `CoordinateArea` constructor/setter semantics; document these as partial/SharpProj-only or add focused APIs if needed.
+- `TestTime` has saved coordinate differences (for example `G51=-5`) but its `H51` check compares `C51` to zero instead of checking that difference; compare every asserted epoch-dependent coordinate and yearly ordering explicitly. `TestAustralia!A35:D38` displays the 2000/2020 outputs and difference without a pass/fail for the source's `Assert.AreNotEqual`. `WalkAmersfoort` shows area bounds and a grid-size estimate but does not execute the source's nested transform loop.
+- `FewEpsg` has cached `#VALUE!` cells outside its passing `G6` summary; classify expected unsupported/invalid cases and check all material failures rather than relying on that summary. `TestNewZealand_defmodel` includes a cached `#NUM!` and a `FALSE` WKT-derived availability value; its summary primarily checks WKT values rather than the year-by-year distance and 2017-step assertions. The WKT issue is separately documented below. `GnomoricBounds` now samples reversed distance-transform extrema; its source extrema assertions remain commented out, so distinguish these diagnostics from active C# assertions.
+
+Other populated sheets also need targeted source-assertion mapping. Saved `FALSE` values on property UDFs can be expected data rather than failed assertions. `AxisHeightsTests.xlsx` has a populated `AxisHeightTests` sheet apparently representing `HeightConversionNLBE` and a populated `DistanceInNL` sheet, but lacks `RecreateViaWKT`, `NL_Wgs84`, and `CreateFromWKT`. Both populated `DistanceTests.xlsx` sheets also need assertion-equivalence review.
 
 ### Separate PROJ WKT round-trip issue: New Zealand deformation model
 
 In `BasicTests.xlsx` / `TestNewZealand_defmodel`, the WKT generated for the EPSG:2105 → EPSG:9000 transform parses successfully but cannot be instantiated when reused as a transform description: `PE.trf.Properties(wkt,,"IsAvailable",options)` returns `FALSE`, while the generated PROJ pipeline returns `TRUE`. The WKT-derived transform lists `nz_linz_nzgd2000-20180701.json` as an available grid. `PE.trf.ListTransformSteps` identifies step 1, **Inverse of ITRF96 to NZGD2000 (7)** (method **Inverse of New Zealand Deformation Model**), as `IsAvailable=FALSE` and `HasInverse=FALSE`; the other four steps are available. An older TopoLib WKT definition embeds an explicit `+proj=defmodel` pipeline and works. Treat this as a separate suspected PROJ operation/database or WKT round-trip issue, **not an established ProjExcel API defect**. It may have been corrected in a PROJ/database version later than 9.5.1, but that has not been verified. Reproduce the WKT parse and instantiability check with a later PROJ/database release before attributing the root cause or marking it fixed. Keep coordinate assertions using the working CRS pair or PROJ pipeline separate from the WKT round-trip regression.
 
-Complete the coverage in stages: (1) populate empty method sheets, using source method names; (2) map each material source assertion and scenario to an Excel-accessible UDF result, expected value, and explicit comparison, documenting SharpProj-only behavior that cannot be reproduced through ProjExcel; (3) fix or document mismatched saved comparisons and avoid relying on display-only output or stale cached results; (4) recalculate with the intended ProjExcel add-in in Excel and verify every comparison, including network/grid-dependent scenarios under their required conditions. Keep the separate `docs/API_ProjExcel.xlsx` API tests distinct from this source-test parity audit.
+Complete the coverage in stages: (1) map each material source assertion and scenario to an Excel-accessible UDF result, expected value, and explicit comparison, documenting SharpProj-only behavior that cannot be reproduced through ProjExcel; (2) fix or document mismatched saved comparisons and avoid relying on display-only output or stale cached results; (3) recalculate with the intended ProjExcel add-in in Excel and verify every comparison, including network/grid-dependent scenarios under their required conditions. Keep the separate `docs/API_ProjExcel.xlsx` API tests distinct from this source-test parity audit.
 
 ## Transform parameters
 
@@ -41,7 +49,7 @@ Complete the coverage in stages: (1) populate empty method sheets, using source 
 
 The list UDFs explicitly map the installed SharpProj `CoordinateTransformParameter` fields: Name, numeric Value, ValueString, UnitName, UnitCategory, UnitConversionFactor, and parameter/unit authority and code. Missing text and non-finite numeric values use the optional null placeholder. A parameter-free transform or step returns only the field-name column, not an error. These are SharpProj parameter records, not an enumeration of every executable PROJ pipeline token. Do not assume parameter metadata includes grid filenames, infer missing steps from empty parameters, rely on reflection or `ToString()` for parameter serialization, or edit `PE.trf.TransformList`.
 
-Every `PE.trf.List*` UDF ends with an optional `transpose` flag (default `FALSE`); omit it to retain the usual table orientation.
+Most `PE.trf.List*` UDFs end with an optional `transpose` flag (default `FALSE`); omit it to retain the usual table orientation. `PE.trf.ListTransformOptions()` is a fixed reference table without a `transpose` argument.
 
 ## Other transform properties
 
@@ -58,6 +66,8 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 - Preserve pre-execution candidate/grid availability diagnostics. Non-finite results in `ApplyCore` and `ApplyExCore` report the candidate, row, and affected coordinate but do not identify the underlying PROJ cause.
 - Use consistent `#ERR` diagnostics and validate inputs; `ApplyEx` now rejects more than four coordinate columns instead of treating them as two.
 - Prioritize input compatibility and unavailable-operation diagnostics.
+- `PE.lst.CoordinateReferenceSystemList` supports optional Authority and CelestialBodyName filtering after its existing Header and AllowDeprecated arguments without changing the eight-column output. `PE.lst.GeoidModelList` exposes per-CRS Authority/Name records, and `PE.lst.UnitOfMeasurementList` exposes category-filtered unit metadata. `PE.lst.AuthorityList` uses SharpProj's `GetAuthorities()` in native order; the separate internal authority lookup used for CRS/transform parsing is unchanged.
+- `PE.crs.CoordinateMetadataProperties` exposes metadata Type, CRS presence, and Epoch. `PE.crs.ListDistanceTransformBounds` samples a CRS's area and reports reverse distance-transform extrema; it is a task-oriented diagnostic, not a general-purpose `CoordinateArea` or `CoordinateMetadata` object API.
 
 ## Archived PE.crs.* functions (not compiled)
 
@@ -144,6 +154,7 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 ## Compiled PE.crs.* functions
 
 - `PE.crs.AxisProperties`
+- `PE.crs.CoordinateMetadataProperties`
 - `PE.crs.EuclideanArea`
 - `PE.crs.EuclideanDistance`
 - `PE.crs.EuclideanDistanceZ`
@@ -155,6 +166,7 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 - `PE.crs.IsEquivalentToRelaxed`
 - `PE.crs.ListAxisProperties`
 - `PE.crs.ListCrsProperties`
+- `PE.crs.ListDistanceTransformBounds`
 - `PE.crs.ListIdentifierProperties`
 - `PE.crs.Properties`
 - `PE.crs.ToString`
@@ -171,6 +183,7 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 - `PE.trf.ListStepParameters`
 - `PE.trf.ListTransformGrids`
 - `PE.trf.ListTransformOperations`
+- `PE.trf.ListTransformOptions`
 - `PE.trf.ListTransformParameters`
 - `PE.trf.ListTransformProperties`
 - `PE.trf.ListTransformSteps`
@@ -183,4 +196,14 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 - `PE.trf.StepCount`
 - `PE.trf.StepProperties`
 - `PE.trf.ToString`
+- `PE.trf.ToStringReversed`
 - `PE.trf.UsageAreaProperties`
+
+## Compiled PE.lst.* functions
+
+- `PE.lst.AuthorityList`
+- `PE.lst.CelestialBodyList`
+- `PE.lst.CoordinateReferenceSystemList`
+- `PE.lst.GeoidModelList`
+- `PE.lst.OperationList`
+- `PE.lst.UnitOfMeasurementList`
