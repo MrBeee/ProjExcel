@@ -148,6 +148,107 @@ namespace ProjExcel
 
         private static readonly string[] IdentifierPropertyNames = { "Authority", "Code" };
 
+        private sealed class CrsOptionsInput
+        {
+            public bool Normalized = true;
+            public bool PromoteTo3D;
+            public bool DemoteTo2D;
+
+            public static CrsOptionsInput Parse(object input)
+            {
+                var result = new CrsOptionsInput();
+                if (input is object[,] range)
+                {
+                    if (range.GetLength(0) != 1 || range.GetLength(1) != 1)
+                        throw new ArgumentException("CRS options must be a single cell.");
+                    input = range[0, 0];
+                }
+
+                if (Optional.IsMissing(input))
+                    return result;
+
+                if (!(input is string token) || !token.Contains("="))
+                {
+                    result.Normalized = Optional.Check(input, true);
+                    return result;
+                }
+
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string part in token.Split(';'))
+                {
+                    string[] pair = part.Trim().Split('=');
+                    if (pair.Length != 2 || string.IsNullOrWhiteSpace(pair[0]) || !seen.Add(pair[0].Trim()))
+                        throw new ArgumentException("Invalid or duplicate CRS option.");
+
+                    string name = pair[0].Trim();
+                    string value = pair[1].Trim();
+                    if (!bool.TryParse(value, out bool enabled))
+                        throw new ArgumentException($"{name} must be TRUE or FALSE.");
+
+                    if (string.Equals(name, "Normalized", StringComparison.OrdinalIgnoreCase))
+                        result.Normalized = enabled;
+                    else if (string.Equals(name, "PromoteTo3D", StringComparison.OrdinalIgnoreCase))
+                        result.PromoteTo3D = enabled;
+                    else if (string.Equals(name, "DemoteTo2D", StringComparison.OrdinalIgnoreCase))
+                        result.DemoteTo2D = enabled;
+                    else
+                        throw new ArgumentException($"Unknown CRS option: {name}.");
+                }
+
+                if (result.PromoteTo3D && result.DemoteTo2D)
+                    throw new ArgumentException("PromoteTo3D and DemoteTo2D cannot both be TRUE.");
+                return result;
+            }
+        }
+
+        private static CoordinateReferenceSystem AdjustCrs(CoordinateReferenceSystem originalCrs, CrsOptionsInput options)
+        {
+            CoordinateReferenceSystem adjusted = options.PromoteTo3D ? originalCrs.PromotedTo3D()
+                : options.DemoteTo2D ? originalCrs.DemotedTo2D() : null;
+            if ((options.PromoteTo3D || options.DemoteTo2D) && adjusted == null)
+                throw new ArgumentException("The requested CRS dimensional change could not be constructed.");
+            return adjusted;
+        }
+
+        [ExcelFunction(Name = "PE.crs.Options", Description = "Create a CRS inspection options token")]
+        public static string Options(
+            [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null,
+            [ExcelArgument(Name = "PromoteTo3D", Description = "Promote the CRS to 3D (FALSE)")] object promoteTo3D = null,
+            [ExcelArgument(Name = "DemoteTo2D", Description = "Demote the CRS to 2D (FALSE)")] object demoteTo2D = null)
+        {
+            try
+            {
+                bool normalize = Optional.Check(normalized, true);
+                bool promote = Optional.Check(promoteTo3D, false);
+                bool demote = Optional.Check(demoteTo2D, false);
+                if (promote && demote)
+                    throw new ArgumentException("PromoteTo3D and DemoteTo2D cannot both be TRUE.");
+
+                string token = "Normalized=" + (normalize ? "True" : "False");
+                if (promote)
+                    token += "; PromoteTo3D=True";
+                if (demote)
+                    token += "; DemoteTo2D=True";
+                return token;
+            }
+            catch (ArgumentException ex)
+            {
+                return "#ERR: " + ex.Message;
+            }
+        }
+
+        [ExcelFunction(Name = "PE.crs.ListOptions", Description = "List supported CRS inspection options")]
+        public static object[,] ListOptions()
+        {
+            return new object[,]
+            {
+                { "Option", "Purpose" },
+                { "Normalized", "Normalize axis ordering after any dimensional change (default TRUE)." },
+                { "PromoteTo3D", "Promote the inspected CRS to 3D (default FALSE); incompatible with DemoteTo2D." },
+                { "DemoteTo2D", "Demote the inspected CRS to 2D (default FALSE); incompatible with PromoteTo3D." }
+            };
+        }
+
         private static int ParseCrsPropertyIndex(object property, string[] names)
         {
             if (Optional.IsEmpty(property))
@@ -273,7 +374,7 @@ namespace ProjExcel
         public static object Properties(
             [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "properties", Description = "Comma-separated property names or indices; see PE.crs.ListCrsProperties()")] object properties,
-            [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null,
+            [ExcelArgument(Name = "Normalized", Description = "TRUE/FALSE (default TRUE), or a token from PE.crs.Options()")] object normalized = null,
             [ExcelArgument(Name = "nullValues", Description = "Replacement for missing values (<null>)")] object nullValues = null)
         {
             try
@@ -287,11 +388,13 @@ namespace ProjExcel
                     return "#ERR: Property index out of range.";
 
                 string nullValueText = Optional.Check(nullValues, "<null>");
+                var options = CrsOptionsInput.Parse(normalized);
                 using (ProjContext pjContext = CreateContext())
                 using (var originalCrs = CreateCrs(oCrs, pjContext))
-                using (var normalizedCrs = Optional.Check(normalized, true) ? originalCrs.WithAxisNormalized() : null)
+                using (var adjustedCrs = AdjustCrs(originalCrs, options))
+                using (var normalizedCrs = options.Normalized ? (adjustedCrs ?? originalCrs).WithAxisNormalized() : null)
                 {
-                    var crs = normalizedCrs ?? originalCrs;
+                    var crs = normalizedCrs ?? adjustedCrs ?? originalCrs;
                     if (!multiple)
                         return GetCrsPropertyValue(crs, originalCrs, CrsPropertyNames[indices[0]], nullValueText);
 
@@ -436,7 +539,7 @@ namespace ProjExcel
             [ExcelArgument(Name = "axisIndex", Description = "Zero-based axis index")] object axisIndex,
             [ExcelArgument(Name = "properties", Description = "Comma-separated names or indices; see PE.crs.ListAxisProperties()")] object properties,
             [ExcelArgument(Name = "coordinateSystemAxis", Description = "Read CoordinateSystem.Axis instead of Axis (FALSE)")] object coordinateSystemAxis = null,
-            [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null,
+            [ExcelArgument(Name = "Normalized", Description = "TRUE/FALSE (default TRUE), or a token from PE.crs.Options()")] object normalized = null,
             [ExcelArgument(Name = "nullValues", Description = "Replacement for missing values (<null>)")] object nullValues = null)
         {
             try
@@ -451,12 +554,17 @@ namespace ProjExcel
 
                 int nAxis = ParseCrsPropertyIndex(axisIndex, new string[0]);
                 string nullValueText = Optional.Check(nullValues, "<null>");
+                bool optionsInFourthArgument = coordinateSystemAxis is string text && text.Contains("=");
+                if (optionsInFourthArgument && !Optional.IsMissing(normalized))
+                    throw new ArgumentException("Specify CRS options in either coordinateSystemAxis or Normalized, not both.");
+                var options = CrsOptionsInput.Parse(optionsInFourthArgument ? coordinateSystemAxis : normalized);
                 using (ProjContext pjContext = CreateContext())
                 using (var originalCrs = CreateCrs(oCrs, pjContext))
-                using (var normalizedCrs = Optional.Check(normalized, true) ? originalCrs.WithAxisNormalized() : null)
+                using (var adjustedCrs = AdjustCrs(originalCrs, options))
+                using (var normalizedCrs = options.Normalized ? (adjustedCrs ?? originalCrs).WithAxisNormalized() : null)
                 {
-                    var crs = normalizedCrs ?? originalCrs;
-                    var axes = Optional.Check(coordinateSystemAxis, false) ? crs.CoordinateSystem?.Axis : crs.Axis;
+                    var crs = normalizedCrs ?? adjustedCrs ?? originalCrs;
+                    var axes = !optionsInFourthArgument && Optional.Check(coordinateSystemAxis, false) ? crs.CoordinateSystem?.Axis : crs.Axis;
                     if (axes == null)
                         return "#ERR: CRS has no axes.";
                     if (nAxis < 0 || nAxis >= axes.Count)
@@ -562,17 +670,19 @@ namespace ProjExcel
         public static object ToString(
             [ExcelArgument(Name = "Crs", Description = "Single cell with EPSG:1234, an EPSG code, WKT, JSON or PROJ string")] object oCrs,
             [ExcelArgument(Name = "stringFormat", Description = "Proj, Wkt or Json (Proj)")] object stringFormat,
-            [ExcelArgument(Name = "Normalized", Description = "Use normalized axis ordering (TRUE)")] object normalized = null)
+            [ExcelArgument(Name = "Normalized", Description = "TRUE/FALSE (default TRUE), or a token from PE.crs.Options()")] object normalized = null)
         {
             try
             {
                 int outputFormat = TransformFunctions.ParseOutputFormatString(stringFormat);
 
+                var options = CrsOptionsInput.Parse(normalized);
                 using (ProjContext pjContext = CreateContext())
                 using (var originalCrs = CreateCrs(oCrs, pjContext))
-                using (var normalizedCrs = Optional.Check(normalized, true) ? originalCrs.WithAxisNormalized() : null)
+                using (var adjustedCrs = AdjustCrs(originalCrs, options))
+                using (var normalizedCrs = options.Normalized ? (adjustedCrs ?? originalCrs).WithAxisNormalized() : null)
                 {
-                    var crs = normalizedCrs ?? originalCrs;
+                    var crs = normalizedCrs ?? adjustedCrs ?? originalCrs;
                     string result;
                     switch (outputFormat)
                     {
