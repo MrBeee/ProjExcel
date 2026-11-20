@@ -34,7 +34,11 @@ namespace ProjExcel
 
             try
             {
-                string[] authorities = GetAuthorityList();
+                string[] authorities;
+                using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
+                {
+                    authorities = pjContext.GetAuthorities().ToArray();
+                }
 
                 object[,] res = new object[authorities.Length + nOffset, 1];
 
@@ -290,6 +294,63 @@ namespace ProjExcel
                 return AddIn.ProcessException(ex);
             }
         } // OperationList
+
+        [ExcelFunction(
+            Name = "PE.lst.UnitOfMeasurementList",
+            Category = "LST - List related",
+            Description = "Lists PROJ database units of measurement, optionally filtered by category")]
+        public static object UnitOfMeasurementList(
+            [ExcelArgument(Name = "Category", Description = "Unit category (blank = all categories)")] object category = null,
+            [ExcelArgument(Name = "Header", Description = "Use header row (true)")] object header = null)
+        {
+            try
+            {
+                if (!Optional.IsEmpty(category) && !(category is string))
+                    throw new ArgumentException("Category must be a text value.");
+
+                bool bHeader = Optional.Check(header, true);
+                string categoryFilter = (category as string)?.Trim();
+                using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
+                {
+                    var units = pjContext.GetUnitsOfMeasurement(new UnitOfMeasurementFilter
+                    {
+                        Category = string.IsNullOrEmpty(categoryFilter) ? null : categoryFilter
+                    });
+
+                    if (units.Count == 0 && !bHeader)
+                        return "#ERR: No units of measurement found.";
+
+                    object[,] result = new object[units.Count + (bHeader ? 1 : 0), 6];
+                    int offset = bHeader ? 1 : 0;
+                    if (bHeader)
+                    {
+                        result[0, 0] = "Category";
+                        result[0, 1] = "Name";
+                        result[0, 2] = "ShortName";
+                        result[0, 3] = "Authority";
+                        result[0, 4] = "Code";
+                        result[0, 5] = "ConversionFactor";
+                    }
+
+                    for (int i = 0; i < units.Count; i++)
+                    {
+                        var unit = units[i];
+                        result[i + offset, 0] = unit.Category;
+                        result[i + offset, 1] = unit.Name;
+                        result[i + offset, 2] = unit.ShortName;
+                        result[i + offset, 3] = unit.Identifier?.Authority;
+                        result[i + offset, 4] = unit.Identifier?.Code;
+                        result[i + offset, 5] = unit.ConversionFactor;
+                    }
+
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                return AddIn.ProcessException(ex);
+            }
+        }
 
         [ExcelFunction(
             Name = "PE.lst.CelestialBodyList",
