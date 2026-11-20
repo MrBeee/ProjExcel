@@ -307,6 +307,85 @@ namespace ProjExcel
             }
         }
 
+        [ExcelFunction(Name = "PE.crs.ListDistanceTransformBounds", Description = "Sample the CRS usage area and list projected extrema of the reversed distance transform")]
+        public static object ListDistanceTransformBounds(
+            [ExcelArgument(Name = "Crs", Description = "Single CRS value, for example ESRI:102034")] object oCrs)
+        {
+            try
+            {
+                using (ProjContext context = CreateContext())
+                using (var originalCrs = CreateCrs(oCrs, context))
+                using (var crs = originalCrs.WithAxisNormalized())
+                {
+                    var area = crs.UsageArea;
+                    var transform = crs.DistanceTransform;
+                    if (area == null || transform == null || !transform.IsAvailable || !transform.HasInverse)
+                        throw new ArgumentException("CRS usage area or inverse distance transform is unavailable.");
+
+                    double south = Math.Min(area.SouthLatitude, area.NorthLatitude);
+                    double north = Math.Max(area.SouthLatitude, area.NorthLatitude);
+                    double west = area.WestLongitude;
+                    double east = area.EastLongitude;
+                    if (double.IsNaN(west) || double.IsNaN(east) || double.IsNaN(south) || double.IsNaN(north) ||
+                        double.IsInfinity(west) || double.IsInfinity(east) || double.IsInfinity(south) || double.IsInfinity(north) ||
+                        west > east)
+                        throw new ArgumentException("CRS usage area does not have finite, ordered longitude and latitude bounds.");
+
+                    double[] min = { double.PositiveInfinity, double.PositiveInfinity };
+                    double[] max = { double.NegativeInfinity, double.NegativeInfinity };
+                    double[] minLongitude = new double[2], maxLongitude = new double[2];
+                    double[] minLatitude = new double[2], maxLatitude = new double[2];
+                    double[] minOther = new double[2], maxOther = new double[2];
+                    int validCount = 0;
+                    for (double longitude = west; longitude <= east; longitude += 1)
+                    {
+                        for (double latitude = south; latitude <= north; latitude += 1)
+                        {
+                            var point = transform.ApplyReversed(new PPoint(longitude, latitude));
+                            if (!point.HasValues)
+                                continue;
+
+                            validCount++;
+                            double[] values = { point.X, point.Y };
+                            for (int axis = 0; axis < 2; axis++)
+                            {
+                                if (values[axis] < min[axis])
+                                {
+                                    min[axis] = values[axis];
+                                    minLongitude[axis] = longitude;
+                                    minLatitude[axis] = latitude;
+                                    minOther[axis] = values[1 - axis];
+                                }
+                                if (values[axis] > max[axis])
+                                {
+                                    max[axis] = values[axis];
+                                    maxLongitude[axis] = longitude;
+                                    maxLatitude[axis] = latitude;
+                                    maxOther[axis] = values[1 - axis];
+                                }
+                            }
+                        }
+                    }
+
+                    if (validCount == 0)
+                        throw new ArgumentException("No valid projected points were found in the CRS usage area.");
+
+                    return new object[,]
+                    {
+                        { "Extremum", "Longitude", "Latitude", "Projected X", "Projected Y", "Valid points" },
+                        { "xMin", minLongitude[0], minLatitude[0], min[0], minOther[0], validCount },
+                        { "xMax", maxLongitude[0], maxLatitude[0], max[0], maxOther[0], validCount },
+                        { "yMin", minLongitude[1], minLatitude[1], minOther[1], min[1], validCount },
+                        { "yMax", maxLongitude[1], maxLatitude[1], maxOther[1], max[1], validCount }
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                return AddIn.ProcessException(ex);
+            }
+        }
+
         [ExcelFunction(Name = "PE.crs.ListAxisProperties", Description = "List accessible CRS axis properties by name and index")]
         public static object ListAxisProperties(
             [ExcelArgument(Name = "transpose", Description = "Transpose the list (FALSE)")] object transpose = null)

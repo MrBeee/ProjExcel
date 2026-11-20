@@ -85,7 +85,9 @@ namespace ProjExcel
             Description = "Provides a (vertical) spillover list with all coordinate reference systems from the PROJ database")]
         public static object CoordinateReferenceSystemList(
             [ExcelArgument("Use header row (true)", Name = "Header")] object header,
-            [ExcelArgument("Include deprecated CRSs (true)", Name = "AllowDeprecated")] object allowDeprecated = null
+            [ExcelArgument("Include deprecated CRSs (true)", Name = "AllowDeprecated")] object allowDeprecated = null,
+            [ExcelArgument("Filter by authority (blank = all)", Name = "Authority")] object authority = null,
+            [ExcelArgument("Filter by celestial body (blank = all)", Name = "CelestialBodyName")] object celestialBodyName = null
             )
         {
             bool bHeader = Optional.Check(header, true);
@@ -94,7 +96,15 @@ namespace ProjExcel
 
             try
             {
-                object[,] data = GetCoordinateReferenceSystemList(bAllowDeprecated);
+                if ((!Optional.IsEmpty(authority) && !(authority is string)) ||
+                    (!Optional.IsEmpty(celestialBodyName) && !(celestialBodyName is string)))
+                    throw new ArgumentException("Authority and CelestialBodyName must be text values.");
+
+                string authorityFilter = (authority as string)?.Trim();
+                string bodyFilter = (celestialBodyName as string)?.Trim();
+                object[,] data = string.IsNullOrEmpty(authorityFilter) && string.IsNullOrEmpty(bodyFilter)
+                    ? GetCoordinateReferenceSystemList(bAllowDeprecated)
+                    : BuildCoordinateReferenceSystemList(bAllowDeprecated, authorityFilter, bodyFilter);
 
                 object[,] res = new object[data.GetLength(0) + nOffset, data.GetLength(1)];
 
@@ -137,23 +147,28 @@ namespace ProjExcel
                 if (allowDeprecated)
                 {
                     if (_coordinateReferenceSystemListCache == null)
-                        _coordinateReferenceSystemListCache = BuildCoordinateReferenceSystemList(true);
+                        _coordinateReferenceSystemListCache = BuildCoordinateReferenceSystemList(true, null, null);
 
                     return _coordinateReferenceSystemListCache;
                 }
 
                 if (_coordinateReferenceSystemListWithoutDeprecatedCache == null)
-                    _coordinateReferenceSystemListWithoutDeprecatedCache = BuildCoordinateReferenceSystemList(false);
+                    _coordinateReferenceSystemListWithoutDeprecatedCache = BuildCoordinateReferenceSystemList(false, null, null);
 
                 return _coordinateReferenceSystemListWithoutDeprecatedCache;
             }
         } // GetCoordinateReferenceSystemList
 
-        private static object[,] BuildCoordinateReferenceSystemList(bool allowDeprecated)
+        private static object[,] BuildCoordinateReferenceSystemList(bool allowDeprecated, string authority, string celestialBodyName)
         {
             using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
             {
-                var crsItems = pjContext.GetCoordinateReferenceSystems(new CoordinateReferenceSystemFilter { AllowDeprecated = allowDeprecated }).ToArray();
+                var crsItems = pjContext.GetCoordinateReferenceSystems(new CoordinateReferenceSystemFilter
+                {
+                    AllowDeprecated = allowDeprecated,
+                    Authority = authority,
+                    CelestialBodyName = celestialBodyName
+                }).ToArray();
                 object[,] res = new object[crsItems.Length, 8];
 
                 for (int i = 0; i < crsItems.Length; i++)
@@ -176,6 +191,59 @@ namespace ProjExcel
                 return res;
             }
         } // BuildCoordinateReferenceSystemList
+
+        [ExcelFunction(
+            Name = "PE.lst.GeoidModelList",
+            Category = "LST - List related",
+            Description = "Lists geoid models associated with a database coordinate reference system")]
+        public static object GeoidModelList(
+            [ExcelArgument(Name = "Crs", Description = "Single CRS value, for example EPSG:5703")] object crs,
+            [ExcelArgument(Name = "Header", Description = "Use header row (true)")] object header = null)
+        {
+            try
+            {
+                bool bHeader = Optional.Check(header, true);
+                using (ProjContext pjContext = new ProjContext() { EnableNetworkConnections = false })
+                using (var coordinateReferenceSystem = Crs.CreateCrs(crs, pjContext))
+                {
+                    var identifier = coordinateReferenceSystem.Identifiers?.FirstOrDefault();
+                    if (identifier == null || string.IsNullOrWhiteSpace(identifier.Authority) || string.IsNullOrWhiteSpace(identifier.Code))
+                        throw new ArgumentException("CRS must have a database authority and code to list geoid models.");
+
+                    var crsInfo = pjContext.GetCoordinateReferenceSystems(new CoordinateReferenceSystemFilter
+                    {
+                        Authority = identifier.Authority,
+                        AllowDeprecated = true
+                    }).FirstOrDefault(info => string.Equals(info.Code, identifier.Code, StringComparison.OrdinalIgnoreCase));
+
+                    if (crsInfo == null)
+                        throw new ArgumentException($"CRS {identifier.Authority}:{identifier.Code} was not found in the PROJ database.");
+
+                    var models = crsInfo.GetGeoidModels();
+                    if (models.Count == 0 && !bHeader)
+                        return "#ERR: No geoid models found for the CRS.";
+
+                    object[,] result = new object[models.Count + (bHeader ? 1 : 0), 2];
+                    if (bHeader)
+                    {
+                        result[0, 0] = "Authority";
+                        result[0, 1] = "Name";
+                    }
+
+                    for (int i = 0; i < models.Count; i++)
+                    {
+                        result[i + (bHeader ? 1 : 0), 0] = models[i].Authority;
+                        result[i + (bHeader ? 1 : 0), 1] = models[i].Name;
+                    }
+
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                return AddIn.ProcessException(ex);
+            }
+        }
 
         [ExcelFunction(
             Name = "PE.lst.OperationList",
