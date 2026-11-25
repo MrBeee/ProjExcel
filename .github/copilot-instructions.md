@@ -30,6 +30,7 @@
 - When CRS UDFs use scalar object inputs, retain a centralized check accepting 1×1 object[,] values (e.g. returned from another function) and rejecting multi-cell ranges; a CRS still represents exactly one cell.
 - User does not want to expand the ProjExcel API with new UDFs for CRS methods; prefers considering a CRS options token aligned with existing transform options for normalization, promotion, and demotion.
 - Provide discoverable PE.crs.Options() and PE.crs.ListOptions() UDFs; retain existing CRS UDFs and Boolean Normalized compatibility.
+- For PE.lib inspection UDFs, expose a ListLibProperties function publishing stable valid property tokens and a Properties function consuming one or more of those tokens; include all existing library aspects, including OS and network, while preserving legacy UDFs.
 
 ## Code Style
 - Avoid superfluous one-line helper methods; prefer direct calls when they do not reduce duplication meaningfully.
