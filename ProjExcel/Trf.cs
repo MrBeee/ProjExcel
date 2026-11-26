@@ -1946,7 +1946,7 @@ namespace ProjExcel
             "UsageArea.CenterY"
         };
 
-        private static string[] TransformListAspectValues(CoordinateTransform candidate, string nullValueText)
+        private static object[] TransformListAspectValues(CoordinateTransform candidate, string nullValueText)
         {
             var areaBounds = candidate?.UsageArea;
             string ids;
@@ -1970,12 +1970,12 @@ namespace ProjExcel
                 SafeCandidateValue(candidate == null ? null : (object)candidate.TargetCRS, nullValueText),
                 SafeCandidateContextValue(candidate, nullValueText),
                 SafeCandidateValue(areaBounds == null ? null : (object)areaBounds.Name, nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.WestLongitude), nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.SouthLatitude), nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.EastLongitude), nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.NorthLatitude), nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.CenterX), nullValueText),
-                SafeCandidateValue(areaBounds == null ? null : (object)FormatCoordinateValue(areaBounds.CenterY), nullValueText)
+                areaBounds == null || double.IsNaN(areaBounds.WestLongitude) || double.IsInfinity(areaBounds.WestLongitude) ? (object)nullValueText : areaBounds.WestLongitude,
+                areaBounds == null || double.IsNaN(areaBounds.SouthLatitude) || double.IsInfinity(areaBounds.SouthLatitude) ? (object)nullValueText : areaBounds.SouthLatitude,
+                areaBounds == null || double.IsNaN(areaBounds.EastLongitude) || double.IsInfinity(areaBounds.EastLongitude) ? (object)nullValueText : areaBounds.EastLongitude,
+                areaBounds == null || double.IsNaN(areaBounds.NorthLatitude) || double.IsInfinity(areaBounds.NorthLatitude) ? (object)nullValueText : areaBounds.NorthLatitude,
+                areaBounds == null || double.IsNaN(areaBounds.CenterX) || double.IsInfinity(areaBounds.CenterX) ? (object)nullValueText : areaBounds.CenterX,
+                areaBounds == null || double.IsNaN(areaBounds.CenterY) || double.IsInfinity(areaBounds.CenterY) ? (object)nullValueText : areaBounds.CenterY
             };
         }
 
@@ -2000,7 +2000,7 @@ namespace ProjExcel
 
             for (int candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
             {
-                string[] values = TransformListAspectValues(candidates[candidateIndex], nullValueText);
+                object[] values = TransformListAspectValues(candidates[candidateIndex], nullValueText);
                 for (int row = 0; row < TransformListAspectNames.Length; row++)
                 {
                     result[row + 1, candidateIndex + 1] = values[row];

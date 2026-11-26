@@ -2,7 +2,7 @@
 
 ## API maturity against SharpProj
 
-ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*` and `PE.trf.*` API and separately records archived CRS UDFs. It is not an exhaustive audit of every SharpProj member. Standalone `CoordinateArea` construction/mutation is SharpProj object behavior, not a required Excel UDF. The existing `PE.crs.Options()` token can promote or demote a CRS for inspection through `PE.crs.Properties` and `PE.crs.AxisProperties`. Transform option parsing is handled inside UDF error boundaries; `Apply*` and `Apply*Ex` report row/candidate/coordinate failures, and `Roundtrip` validates its point, count, and result and accepts a forward/reverse flag. Compiled CRS and transform UDFs take scalar CRS arguments. The shared CRS parser also accepts a 1×1 array and rejects multi-cell CRS ranges for `PE.crs.*` and CRS-pair `PE.trf.*` calls; the separate transform-description path (blank target CRS) does not accept an array. Numeric EPSG inputs in both creation paths are checked before integer conversion.
+ProjExcel exposes the main CRS and coordinate-transform workflows through Excel UDFs, but it is a task-oriented interface rather than a one-to-one wrapper for SharpProj. This assessment covers the compiled `PE.crs.*`, `PE.trf.*`, and `PE.lib.*` API and separately records archived CRS UDFs. It is not an exhaustive audit of every SharpProj member. Standalone `CoordinateArea` construction/mutation is SharpProj object behavior, not a required Excel UDF. The existing `PE.crs.Options()` token can promote or demote a CRS for inspection through `PE.crs.Properties` and `PE.crs.AxisProperties`. Transform option parsing is handled inside UDF error boundaries; `Apply*` and `Apply*Ex` report row/candidate/coordinate failures, and `Roundtrip` validates its point, count, and result and accepts a forward/reverse flag. Compiled CRS and transform UDFs take scalar CRS arguments. The shared CRS parser also accepts a 1×1 array and rejects multi-cell CRS ranges for `PE.crs.*` and CRS-pair `PE.trf.*` calls; the separate transform-description path (blank target CRS) does not accept an array. Numeric EPSG inputs in both creation paths are checked before integer conversion.
 
 Explicit candidate selection, 2D/3D/4D input handling, and transform metadata access already exist; they are not outstanding priorities. When transform creation fails with `BestOnly=TRUE`, ProjExcel retains SharpProj's error rather than relabeling every failure as an invalid `BestOnly` option or retrying with `BestOnly=FALSE`. Preserve single-value CRS inputs and the existing transform-description path; do not add two-cell authority/code inputs. `docs/API_ProjExcel.xlsx` is the intended API test workbook for all API groups (deg/lst/trf/...). `ExcelTests` aims to mimic, as far as practical, tests in `D:\GitHub\SharpProj\src\SharpProj.Tests` and also contains many ProjExcel API checks: the current saved `BasicTests.xlsx` has approximately 14,327 formula anchors containing `PE.*`, including its large `WalkReferenceSystems` sheet. This counts formulas in the XLSX, not evaluated spill cells or passing checks. The other six workbooks besides `BasicTests.xlsx`, `AxisHeightsTests.xlsx`, and `DistanceTests.xlsx` still contain only an empty `Sheet1`. The earlier audit for legacy CRS UDF usage covered these nine workbooks, not workbooks outside `ExcelTests`.
 
@@ -78,7 +78,7 @@ Do not add a separate UDF for every scalar property such as Name, Accuracy, or H
 
 The 54 functions listed below, `PE.crs.UsageArea.Center`, and the three legacy serialization functions are preserved in `ProjExcel/Deprecated/deprecated.cs` but **excluded from `ProjExcel.csproj`**. They are not registered by the current add-in; workbooks outside the audited `ExcelTests` folder that still call them will need migration. Use the compiled `*Properties()` functions for the property values below. Match the old `Normalized` setting where applicable. Missing-value placeholders, error results, and the shape of some older returns may differ, so replacements are not necessarily drop-in equivalent for every input.
 
-### Use `PE.crs.Properties(crs, property, normalized)`
+### Use `PE.crs.Properties(crs, properties, [normalized], [nullValues])`
 
 - `PE.crs.Axis.Count`
 - `PE.crs.CelestialBodyName`
@@ -119,9 +119,9 @@ The 54 functions listed below, `PE.crs.UsageArea.Center`, and the three legacy s
 - `PE.crs.UsageArea.SouthLatitude`
 - `PE.crs.UsageArea.WestLongitude`
 
-`PE.crs.UsageArea.Center` can instead use `PE.crs.Properties(crs, "UsageArea.Center.X,UsageArea.Center.Y", normalized)` for the two adjacent values. This is a combined-value UDF rather than a single named property.
+`PE.crs.UsageArea.Center` can instead use `PE.crs.Properties(crs, "UsageArea.Center.X,UsageArea.Center.Y", normalized)` for the two adjacent values. This is a combined-value UDF rather than a single named property. `normalized` accepts a Boolean or a token from `PE.crs.Options()`; the token also supports promotion to 3D or demotion to 2D before inspection.
 
-### Use `PE.crs.AxisProperties(crs, axisIndex, property, coordinateSystemAxis, normalized)`
+### Use `PE.crs.AxisProperties(crs, axisIndex, properties, [coordinateSystemAxis], [normalized], [nullValues])`
 
 For `PE.crs.Axis.*`, set `coordinateSystemAxis` to `FALSE` (default):
 
@@ -143,14 +143,14 @@ For `PE.crs.CoordinateSystem.Axis.*`, set `coordinateSystemAxis` to `TRUE`:
 - `PE.crs.CoordinateSystem.Axis.UnitConversionFactor`
 - `PE.crs.CoordinateSystem.Axis.UnitName`
 
-### Use `PE.crs.IdentifierProperties(crs, identifierIndex, property)`
+### Use `PE.crs.IdentifierProperties(crs, identifierIndex, properties, [nullValues])`
 
 Identifier properties read the original (unnormalized) CRS. The archived identifier UDFs defaulted to `Normalized=FALSE`; they could return different results when explicitly called with `Normalized=TRUE`.
 
 - `PE.crs.Identifiers.Authority`
 - `PE.crs.Identifiers.Code`
 
-### Use `PE.crs.ToString(crs, stringFormat, normalized)`
+### Use `PE.crs.ToString(crs, stringFormat, [normalized])`
 
 - `PE.crs.AsJsonString` → `stringFormat="Json"`
 - `PE.crs.AsProjString` → `stringFormat="Proj"`
@@ -173,6 +173,8 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 - `PE.crs.ListCrsProperties`
 - `PE.crs.ListDistanceTransformBounds`
 - `PE.crs.ListIdentifierProperties`
+- `PE.crs.ListOptions`
+- `PE.crs.Options`
 - `PE.crs.Properties`
 - `PE.crs.ToString`
 
@@ -212,3 +214,12 @@ Identifier properties read the original (unnormalized) CRS. The archived identif
 - `PE.lst.GeoidModelList`
 - `PE.lst.OperationList`
 - `PE.lst.UnitOfMeasurementList`
+
+## Compiled PE.lib.* functions
+
+- `PE.lib.ListLibProperties` lists the stable library property names and indices.
+- `PE.lib.Options` accepts one optional Boolean argument per named property (for example, `AddIn.AssemblyVersion` and `Excel.OperatingSystem`); with no inputs, it returns all property tokens as a comma-separated selection.
+- `PE.lib.Properties` reads one named/indexed property or a comma-separated selection in adjacent cells. `Excel.OperatingSystem` remains available here; the `OperatingSystem()` source helper is internal and is not a standalone Excel UDF.
+- `PE.lib.VersionInfo` retains its existing mode-based version lookup.
+
+`PE.lib.AddinVersion` and `PE.lib.ListAddinVersionInfo` have been removed from the source; use the curated library property API for those version values.
